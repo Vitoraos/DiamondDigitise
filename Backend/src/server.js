@@ -9,7 +9,7 @@ const { createApp } = require('./app');
 const config = require('./config');
 const logger = require('./lib/logger');
 const { closeAllQueues } = require('./lib/queue');
-const { startTimerWorker } = require('./modules/timers/timers.worker');
+const { startTimerWorker } = require('./modules/timers/startTimerWorker');
 
 const app = createApp();
 

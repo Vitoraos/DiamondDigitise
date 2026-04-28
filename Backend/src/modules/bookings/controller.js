@@ -1,47 +1,38 @@
-// src/modules/rooms/rooms.controller.js
+// src/modules/bookings/bookings.controller.js
 'use strict';
 
-const roomsService = require('./rooms.service');
+const bookingsService = require('./bookingsService');
 
 const controller = {
   async list(req, res) {
-    const rooms = await roomsService.getAllRooms();
-    res.json({ data: rooms });
-  },
-
-  async listCategories(req, res) {
-    const categories = await roomsService.getCategories();
-    res.json({ data: categories });
+    const bookings = await bookingsService.listBookings();
+    res.json({ data: bookings });
   },
 
   async getOne(req, res) {
-    const room = await roomsService.getRoomById(req.params.id);
-    res.json({ data: room });
+    const booking = await bookingsService.getBookingById(req.params.id);
+    res.json({ data: booking });
   },
 
   async create(req, res) {
-    const room = await roomsService.createRoom(req.body);
-    res.status(201).json({ data: room });
+    const booking = await bookingsService.createBooking(req.body);
+    res.status(201).json({ data: booking });
   },
 
-  async update(req, res) {
-    const room = await roomsService.updateRoom(req.params.id, req.body);
-    res.json({ data: room });
-  },
-
-  async updateStatus(req, res) {
-    const room = await roomsService.updateRoomStatus(
+  async verify(req, res) {
+    const result = await bookingsService.verifyBooking(
       req.params.id,
-      req.body.status,
-      req.body.cleaning_eta_minutes,
       req.user
     );
-    res.json({ data: room });
+    res.json({ data: result });
   },
 
-  async remove(req, res) {
-    await roomsService.deleteRoom(req.params.id);
-    res.status(204).send();
+  async cancel(req, res) {
+    const booking = await bookingsService.cancelBooking(
+      req.params.id,
+      req.user
+    );
+    res.json({ data: booking });
   },
 };
 
