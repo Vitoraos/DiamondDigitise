@@ -1,0 +1,109 @@
+# ============================================================
+# render.yaml — Render deployment configuration
+# Place this file in the ROOT of your GitHub repository.
+# Render reads it automatically on every push.
+#
+# IMPORTANT: Never put secret values in this file.
+# All keys marked "sync: false" must be added manually in:
+#   Render Dashboard → Your Service → Environment → Add Env Var
+# ============================================================
+
+services:
+
+  # ── BACKEND: Node.js Web Service ───────────────────────────
+  - type: web
+    name: hotel-backend
+    runtime: node
+    rootDir: backend          # folder inside your repo where package.json lives
+    region: ohio              # change to: oregon | frankfurt | singapore | ohio
+    plan: free             # starter = $7/mo (no sleep). Use 'free' for testing only.
+                              # free plan sleeps after 15min inactivity — bad for timers
+
+    buildCommand: npm install
+    startCommand: npm start
+
+    # Health check — Render uses this to confirm the service is up
+    healthCheckPath: /health
+
+    # Auto-deploy on every push to main branch
+    autoDeploy: true
+
+    envVars:
+      # ── Non-secret values — safe to put here ──────────────
+      - key: NODE_ENV
+        value: production
+
+      - key: PORT
+        value: 4000
+
+      - key: BOOKING_REF_PREFIX
+        value: HTL
+
+      - key: RECEIPT_REF_PREFIX
+        value: RCP
+
+      - key: MONNIFY_REFUND_FEE
+        value: 5000            # 5000 kobo = ₦50 deduction on refunds
+
+      # ── Redis URL — injected from the Redis service below ──
+      - key: REDIS_URL
+        fromService:
+          name: hotel-redis
+          type: redis
+          property: connectionString
+
+      # ── Secrets — add these manually in Render Dashboard ──
+      # These are listed here so Render knows they exist,
+      # but sync: false means Render won't overwrite your values.
+
+      - key: SUPABASE_URL
+        sync: false
+
+      - key: SUPABASE_ANON_KEY
+        sync: false
+
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+
+      - key: MONNIFY_API_KEY
+        sync: false
+
+      - key: MONNIFY_SECRET_KEY
+        sync: false
+
+      - key: MONNIFY_CONTRACT_CODE
+        sync: false
+
+      - key: MONNIFY_ACCOUNT_NUMBER
+        sync: false
+
+      - key: MONNIFY_BANK_NAME
+        sync: false
+
+      - key: MONNIFY_ACCOUNT_NAME
+        sync: false
+
+      - key: MONNIFY_BASE_URL
+        sync: false           # https://sandbox.monnify.com (test) or https://api.monnify.com (live)
+
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+
+      - key: TELEGRAM_OWNER_CHAT_ID
+        sync: false
+
+      - key: ALLOWED_ORIGINS
+        sync: false           # e.g. https://your-hotel.vercel.app
+
+
+  # ── REDIS: Bull job queue backing store ────────────────────
+  - type: redis
+    name: hotel-redis
+    region: ohio              # must match the web service region above
+    plan: free                # free = 25MB. Upgrade to starter ($10/mo) for production.
+    maxmemoryPolicy: noeviction
+    # noeviction: Redis will error rather than silently drop timer jobs
+    # This is the correct policy for a job queue — never drop jobs quietly
