@@ -19,12 +19,12 @@ const logger = require('./lib/logger');
 const { errorHandler } = require('./middleware/errorHandler');
 
 // ── Route modules (Phase 2+ will fill these in) ──────────────
-const roomRoutes       = require('./modules/rooms/rooms.routes');
-const bookingRoutes    = require('./modules/bookings/bookings.routes');
-const paymentRoutes    = require('./modules/payments/payments.routes');
-const receiptRoutes    = require('./modules/receipts/receipts.routes');
+const roomRoutes       = require('./modules/rooms/route');
+const bookingRoutes    = require('./modules/bookings/router');
+const paymentRoutes    = require('./modules/payments/router');
+const receiptRoutes    = require('./modules/receipts/router');
 const adminRoutes      = require('./modules/admin/admin.routes');
-const notificationRoutes = require('./modules/notifications/notifications.routes');
+const notificationRoutes = require('./modules/notifications/router');
 
 function createApp() {
   const app = express();

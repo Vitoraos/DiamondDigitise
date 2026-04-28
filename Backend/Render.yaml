@@ -14,7 +14,7 @@ services:
   - type: web
     name: hotel-backend
     runtime: node
-    rootDir: backend          # folder inside your repo where package.json lives
+    rootDir: Backend          # folder inside your repo where package.json lives
     region: ohio              # change to: oregon | frankfurt | singapore | ohio
     plan: free             # starter = $7/mo (no sleep). Use 'free' for testing only.
                               # free plan sleeps after 15min inactivity — bad for timers
