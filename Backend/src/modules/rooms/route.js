@@ -4,7 +4,7 @@
 const { Router } = require('express');
 const { asyncHandler } = require('../../middleware/errorHandler');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const controller = require('./rooms.controller');
+const controller = require('./controller');
 
 const router = Router();
 
