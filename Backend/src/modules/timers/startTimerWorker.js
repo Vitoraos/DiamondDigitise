@@ -8,8 +8,8 @@
 const { getQueue } = require('../../lib/queue');
 const { supabaseAdmin } = require('../../lib/supabase');
 const logger = require('../../lib/logger');
-const notificationService = require('../notifications/notifications.service');
-const timersService = require('./timers.service');
+const notificationService = require('../notifications/notificationService');
+const timersService = require('./timersService');
 
 function startTimerWorker() {
   const queue = getQueue('timers');
