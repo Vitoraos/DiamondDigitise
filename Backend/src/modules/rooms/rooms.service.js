@@ -183,6 +183,21 @@ const roomsService = {
       role: actor?.role,
     });
 
+    if (newStatus === 'cleaning' && data.cleaning_started_at) {
+     const { data: lastBooking } = await supabaseAdmin
+       .from('bookings')
+       .select('id')
+       .eq('room_id', id)
+       .in('status', ['confirmed', 'checked_in', 'checked_out'])
+       .order('created_at', { ascending: false })
+       .limit(1)
+       .single();
+     await timersService.scheduleCleaningTimer(
+       id,
+       lastBooking?.id ?? null,
+       new Date(data.cleaning_started_at)
+     );
+   } 
     return data;
   },
 
