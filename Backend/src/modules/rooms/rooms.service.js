@@ -8,6 +8,7 @@
 const { supabaseAdmin } = require('../../lib/supabase');
 const { AppError } = require('../../middleware/errorHandler');
 const logger = require('../../lib/logger');
+const timersService = require('../timers/timersService');
 
 const VALID_STATUSES = ['available', 'in_use', 'cleaning'];
 
