@@ -14,10 +14,10 @@ const { supabaseAdmin } = require('../../lib/supabase');
 const { AppError } = require('../../middleware/errorHandler');
 const config = require('../../config');
 const logger = require('../../lib/logger');
- const bookingsService    = require('../bookings/bookingsService');
- const receiptsService    = require('../receipts/receiptsService');
- const timersService      = require('../timers/timersService');
- const notificationService = require('../notifications/notificationService');
+const bookingsService    = require('../bookings/bookingsService');
+const receiptsService    = require('../receipts/receiptsService');
+const timersService      = require('../timers/timersService');
+const notificationService = require('../notifications/notificationService');
 
 // ── Monnify auth token cache ──────────────────────────────────
 let monnifyToken = null;
@@ -158,6 +158,14 @@ const paymentsService = {
 
     // Schedule timers
     await timersService.scheduleBookingTimers(booking.id, checkOutAt);
+
+     await notificationService.notifyNewBooking({
+     bookingRef:  bookingRef,
+     guestName:   booking.guests?.name,
+     roomNumber:  booking.rooms?.room_number,
+     totalAmount: booking.total_amount,
+     numNights:   booking.num_nights,
+   });
 
     logger.info('Payment confirmed and booking activated', {
       bookingId: booking.id,
