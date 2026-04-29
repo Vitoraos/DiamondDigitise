@@ -14,10 +14,10 @@ const { supabaseAdmin } = require('../../lib/supabase');
 const { AppError } = require('../../middleware/errorHandler');
 const config = require('../../config');
 const logger = require('../../lib/logger');
-const bookingsService = require('../bookings/bookings.service');
-const receiptsService = require('../receipts/receipts.service');
-const timersService = require('../timers/timers.service');
-const notificationService = require('../notifications/notifications.service');
+ const bookingsService    = require('../bookings/bookingsService');
+ const receiptsService    = require('../receipts/receiptsService');
+ const timersService      = require('../timers/timersService');
+ const notificationService = require('../notifications/notificationService');
 
 // ── Monnify auth token cache ──────────────────────────────────
 let monnifyToken = null;
