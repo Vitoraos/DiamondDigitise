@@ -69,7 +69,7 @@ const paymentsService = {
     // ── Look up our booking by payment_ref ───────────────────
     const { data: booking, error } = await supabaseAdmin
       .from('bookings')
-      .select('id, status, total_amount, payment_ref, payments(id, status, amount_received)')
+      .select('id, status, total_amount, payment_ref, num_nights, rooms(room_number), guests(name), payments(id, status, amount_received)')
       .eq('payment_ref', paymentRef)
       .single();
 
