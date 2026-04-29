@@ -13,8 +13,8 @@ router.post('/test',
   requireAuth,
   requireRole('owner'),
   asyncHandler(async (req, res) => {
-    const notificationService = require('./notifications.service');
-    await notificationService.sendToOwner?.('🔔 Test notification from hotel system.');
+const notificationService = require('./notificationService');
+await notificationService.notifyNewBooking({ bookingRef: 'TEST', guestName: 'Test', roomNumber: '000', totalAmount: 0, numNights: 0 });
     res.json({ message: 'Test notification sent' });
   })
 );
