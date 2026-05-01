@@ -67,24 +67,35 @@ const bookingsService = {
     const paymentRef = generatePaymentRef();
     const bookingRef = generateBookingRef();
 
-    // ── Insert booking ───────────────────────────────────────
-    const { data: booking, error: bookingErr } = await supabaseAdmin
-      .from('bookings')
-      .insert({
-        booking_ref:     bookingRef,
-        room_id:         roomId,
-        guest_id:        guest.id,
-        category_id:     room.categories.id,
-        price_per_night: pricePerNight,
-        num_nights:      nights,
-        total_amount:    totalAmount,
-        payment_ref:     paymentRef,
-        status:          'pending_payment',
-      })
-      .select()
-      .single();
+  
+// Inside createBooking(), replace the booking insert error block:
+const { data: booking, error: bookingErr } = await supabaseAdmin
+  .from('bookings')
+  .insert({
+    booking_ref:     bookingRef,
+    room_id:         roomId,
+    guest_id:        guest.id,
+    category_id:     room.categories.id,
+    price_per_night: pricePerNight,
+    num_nights:      nights,
+    total_amount:    totalAmount,
+    payment_ref:     paymentRef,
+    status:          'pending_payment',
+  })
+  .select()
+  .single();
 
-    if (bookingErr) throw new AppError('Failed to create booking', 500);
+if (bookingErr) {
+  // 🛡️ NEW: Handle DB-level double-booking guardrail
+  if (bookingErr.code === '23505') {
+    throw new AppError(
+      'This room was just booked by another guest. Please select a different room.',
+      409,
+      'ROOM_DOUBLE_BOOKED'
+    );
+  }
+  throw new AppError('Failed to create booking', 500);
+}
 
     // ── Insert payment record ────────────────────────────────
     const { error: payErr } = await supabaseAdmin
