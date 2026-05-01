@@ -8,7 +8,7 @@
 //   → confirmBooking() sets room to in_use, starts timers
 // ─────────────────────────────────────────────────────────────
 'use strict';
-
+const timersService = require('../timers/timersService');
 const { supabaseAdmin } = require('../../lib/supabase');
 const { AppError } = require('../../middleware/errorHandler');
 const { generatePaymentRef, generateBookingRef } = require('../../lib/refGenerator');
@@ -312,5 +312,76 @@ async verifyBooking(id, actor) {
     return data;
   },
 };
+
+// ── ADD THIS METHOD TO bookingsService ──
+/**
+ * Front-desk checks out a guest.
+ * Transitions booking to checked_out, room to cleaning, and starts 80m cleaning timer.
+ * @param {string} id - booking UUID
+ * @param {{ id, role, fullName }} actor - admin performing checkout
+ */
+async checkoutBooking(id, actor) {
+  const booking = await this.getBookingById(id);
+  
+  // Guard: Only checked_in bookings can be processed for checkout
+  if (booking.status !== 'checked_in') {
+    throw new AppError('Booking is not in checked_in state', 409, 'NOT_CHECKED_IN');
+  }
+
+  const now = new Date().toISOString();
+  const roomId = booking.room_id;
+
+  // ── 1. Update booking status ──────────────────────────────
+  const { error: bookingErr } = await supabaseAdmin
+    .from('bookings')
+    .update({ status: 'checked_out' })
+    .eq('id', id);
+  if (bookingErr) throw new AppError('Failed to update booking status', 500);
+
+  // ── 2. Transition room to cleaning ────────────────────────
+  // Sets status='cleaning' and records cleaning_started_at
+  const { error: roomErr } = await supabaseAdmin
+    .from('rooms')
+    .update({ 
+      status: 'cleaning', 
+      cleaning_started_at: now 
+    })
+    .eq('id', roomId);
+  if (roomErr) throw new AppError('Failed to update room status', 500);
+
+  // ── 3. Schedule 80-minute cleaning overrun timer ─────────
+  // Uses the exact bookingId for audit context
+  await timersService.scheduleCleaningTimer(roomId, id, new Date(now));
+
+  // ── 4. Audit log ─────────────────────────────────────────
+  await writeAuditLog({
+    actorId:   actor.id,
+    actorRole: actor.role,
+    action:    'checkout_booking',
+    entity:    'bookings',
+    entityId:  id,
+    payload:   { 
+      roomNumber: booking.rooms.room_number,
+      bookingRef: booking.booking_ref 
+    },
+  });
+
+  logger.info('Booking checked out & room cleaning started', {
+    bookingId: id,
+    roomId,
+    actor: actor.fullName,
+  });
+
+  return {
+    success: true,
+    bookingId: id,
+    roomId,
+    cleaningStartedAt: now,
+    cleaningOverrunAt: new Date(
+      new Date(now).getTime() + 80 * 60_000
+    ).toISOString(),
+  };
+}
+
 
 module.exports = bookingsService;
