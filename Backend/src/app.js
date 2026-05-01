@@ -89,6 +89,20 @@ function createApp() {
   // ── Global error handler (must be last) ────────────────────
   app.use(errorHandler);
 
+  // TEMP: src/app.js
+  app.get('/debug/redis', async (req, res) => {
+    const Redis = require('ioredis');
+    const client = new Redis(process.env.REDIS_URL);
+    try {
+      await client.ping();
+      res.json({ connected: true, message: 'Redis OK' });
+    } catch (err) {
+      res.status(500).json({ connected: false, error: err.message });
+    } finally {
+      await client.quit();
+  }
+});
+  
   return app;
 }
 
