@@ -31,6 +31,12 @@ router.post('/:id/verify',
   asyncHandler(controller.verify)
 );
 
+// ── ADD TO ADMIN SECTION ──
+router.post('/:id/checkout',
+  requireAuth,
+  asyncHandler(controller.checkout)
+);
+
 // ── Owner / Manager ──────────────────────────────────────────
 // PATCH /api/bookings/:id/cancel    — cancel a booking
 router.patch('/:id/cancel',
