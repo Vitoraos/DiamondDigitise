@@ -36,4 +36,12 @@ const controller = {
   },
 };
 
+async checkout(req, res) {
+  const result = await bookingsService.checkoutBooking(
+    req.params.id,
+    req.user
+  );
+  res.json({ data: result });
+},
+
 module.exports = controller;
