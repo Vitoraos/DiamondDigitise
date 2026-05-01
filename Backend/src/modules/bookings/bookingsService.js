@@ -233,38 +233,62 @@ const bookingsService = {
   },
 
   /**
-   * Front-desk verifies the booking ID guest presents at reception.
-   * Records the verification in audit_log.
-   */
-  async verifyBooking(id, actor) {
-    const booking = await this.getBookingById(id);
+* Front-desk verifies the booking ID guest presents at reception.
+* Transitions status to checked_in, stamps verified_at/verified_by, logs audit.
+*/
+async verifyBooking(id, actor) {
+  const booking = await this.getBookingById(id);
+  
+  // Allow re-verification if already checked_in, but block invalid states
+  if (!['confirmed', 'checked_in'].includes(booking.status)) {
+    throw new AppError('Booking is not in a verifiable state', 409, 'NOT_VERIFIED');
+  }
 
-    if (!['confirmed', 'checked_in'].includes(booking.status)) {
-      throw new AppError('Booking is not in a verifiable state', 409, 'NOT_VERIFIED');
-    }
+  const now = new Date().toISOString();
 
-    await writeAuditLog({
-      actorId:   actor.id,
-      actorRole: actor.role,
-      action:    'verify_booking',
-      entity:    'bookings',
-      entityId:  id,
-      payload:   { bookingRef: booking.booking_ref },
-    });
+  // ── 1. Update booking record with verification metadata ────
+  const { error: updateErr } = await supabaseAdmin
+    .from('bookings')
+    .update({
+      status:      'checked_in',
+      verified_at: now,
+      verified_by: actor.id
+    })
+    .eq('id', id);
+  if (updateErr) throw new AppError('Failed to verify booking', 500);
 
-    logger.info('Booking verified', { bookingId: id, actor: actor.fullName });
+  // ── 2. Write audit log ────────────────────────────────────
+  await writeAuditLog({
+    actorId:   actor.id,
+    actorRole: actor.role,
+    action:    'verify_booking',
+    entity:    'bookings',
+    entityId:  id,
+    payload:   { 
+      bookingRef: booking.booking_ref,
+      previousStatus: booking.status 
+    },
+  });
 
-    return {
-      valid:       true,
-      bookingRef:  booking.booking_ref,
-      guestName:   booking.guests.name,
-      roomNumber:  booking.rooms.room_number,
-      checkInAt:   booking.check_in_at,
-      checkOutAt:  booking.check_out_at,
-      numNights:   booking.num_nights,
-      totalAmount: booking.total_amount,
-    };
-  },
+  logger.info('Booking verified & checked in', { 
+    bookingId: id, 
+    actor: actor.fullName,
+    verifiedAt: now 
+  });
+
+  return {
+    valid:       true,
+    bookingRef:  booking.booking_ref,
+    guestName:   booking.guests.name,
+    roomNumber:  booking.rooms.room_number,
+    checkInAt:   booking.check_in_at,
+    checkOutAt:  booking.check_out_at,
+    numNights:   booking.num_nights,
+    totalAmount: booking.total_amount,
+    verifiedAt: now
+  };
+},
+
 
   async cancelBooking(id, actor) {
     const { data, error } = await supabaseAdmin
