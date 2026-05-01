@@ -168,10 +168,15 @@ const roomsService = {
       .select()
       .single();
 
-    // DB trigger will throw on invalid transition
+    // 🛡️ DB-level guardrail error handling (Action #3)
     if (error) {
-      if (error.message.includes('Invalid room status transition')) {
+      // Catch trigger rejections for invalid state transitions
+      if (error.code === 'P0001' || error.message?.includes('Invalid room status transition')) {
         throw new AppError(error.message, 422, 'INVALID_TRANSITION');
+      }
+      // Catch duplicate room number (unique constraint)
+      if (error.code === '23505') {
+        throw new AppError(`Room number ${data?.room_number || 'unknown'} already exists`, 409);
       }
       throw new AppError(error.message, 500);
     }
@@ -183,21 +188,24 @@ const roomsService = {
       role: actor?.role,
     });
 
+    // Schedule cleaning timer if manually set to cleaning
     if (newStatus === 'cleaning' && data.cleaning_started_at) {
-     const { data: lastBooking } = await supabaseAdmin
-       .from('bookings')
-       .select('id')
-       .eq('room_id', id)
-       .in('status', ['confirmed', 'checked_in', 'checked_out'])
-       .order('created_at', { ascending: false })
-       .limit(1)
-       .single();
-     await timersService.scheduleCleaningTimer(
-       id,
-       lastBooking?.id ?? null,
-       new Date(data.cleaning_started_at)
-     );
-   } 
+      const { data: lastBooking } = await supabaseAdmin
+        .from('bookings')
+        .select('id')
+        .eq('room_id', id)
+        .in('status', ['confirmed', 'checked_in', 'checked_out'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      await timersService.scheduleCleaningTimer(
+        id,
+        lastBooking?.id ?? null,
+        new Date(data.cleaning_started_at)
+      );
+    }
+
     return data;
   },
 
