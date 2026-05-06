@@ -6,7 +6,7 @@ exports.getAll = async () => {
     .from('categories')
     .select('*')
     .order('name', { ascending: true });
-  
+
   if (error) throw new Error('DATABASE_ERROR');
   return data;
 };
