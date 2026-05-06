@@ -33,7 +33,7 @@ export default function LoginPage() {
         <input
           type="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)} # Fixed: missing 'setEmail'
+          onChange={(e) => setEmail(e.target.value)} /* Fixed: missing 'setEmail' */
           placeholder="admin@yourhotel.com"
           className="w-full p-3 border rounded mb-4"
           required
