@@ -1,0 +1,33 @@
+
+{
+  "name": "hotel-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.x.x",
+    "@supabase/ssr": "^0.x.x",
+    "axios": "^1.x.x",
+    "@tanstack/react-query": "^5.x.x",
+    "lucide-react": "^0.x.x",
+    "next": "^14.x.x",
+    "react": "^18.x.x",
+    "react-dom": "^18.x.x"
+  },
+  "devDependencies": {
+    "typescript": "^5.x.x",
+    "@types/node": "^20.x.x",
+    "@types/react": "^18.x.x",
+    "@types/react-dom": "^18.x.x",
+    "autoprefixer": "^10.x.x",
+    "eslint": "^8.x.x",
+    "eslint-config-next": "^14.x.x",
+    "postcss": "^8.x.x",
+    "tailwindcss": "^3.x.x"
+  }
+}
