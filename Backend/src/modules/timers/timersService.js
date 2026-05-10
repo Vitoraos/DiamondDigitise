@@ -45,9 +45,8 @@ const timersService = {
     ];
 
     for (const job of jobs) {
-      if (job.delay <= 0) continue; // Don't schedule past events
-
-      await this._scheduleJob(bookingId, job.type, job.fireAt, job.delay);
+      if (job.delay <= 0) continue;
+      await this._scheduleJob({ bookingId, type: job.type, fireAt: job.fireAt, delay: job.delay });
     }
 
     logger.info('Booking timers scheduled', { bookingId, checkOutAt });
@@ -55,22 +54,31 @@ const timersService = {
 
   /**
    * Schedule a cleaning overrun timer.
-   * Called when admin sets a room to 'cleaning'.
+   * Called when admin sets a room to 'cleaning' or guest checks out.
    *
    * @param {string} roomId
-   * @param {string} bookingId  — most recent booking for context
+   * @param {string|null} bookingId  — most recent booking for context
    * @param {Date}   cleaningStartedAt
    */
   async scheduleCleaningTimer(roomId, bookingId, cleaningStartedAt) {
     const fireAt = new Date(
       cleaningStartedAt.getTime() + config.timers.cleaningOverrunMinutes * 60_000
     );
-    const delay  = fireAt.getTime() - Date.now();
+    const delay = fireAt.getTime() - Date.now();
 
     if (delay <= 0) return;
 
-    await this._scheduleJob(bookingId, 'cleaning_overrun', fireAt, delay, { roomId });
-    logger.info('Cleaning overrun timer scheduled', { roomId, fireAt });
+    // ✅ FIX: roomId is now passed into _scheduleJob and stored in the DB record
+    // so that rehydrateTimers() can reconstruct the full job data after a restart
+    await this._scheduleJob({
+      bookingId,
+      type:   'cleaning_overrun',
+      fireAt,
+      delay,
+      roomId,
+    });
+
+    logger.info('Cleaning overrun timer scheduled', { roomId, bookingId, fireAt });
   },
 
   /**
@@ -123,18 +131,22 @@ const timersService = {
     const queue = getQueue(TIMER_QUEUE);
 
     for (const timer of pendingTimers) {
-      // Check if Bull job still exists (survived restart via Redis)
       if (timer.bull_job_id) {
         const existing = await queue.getJob(timer.bull_job_id);
-        if (existing) continue; // Already in queue — skip
+        if (existing) continue;
       }
 
-      // Job missing from Redis — re-add it
       const delay = new Date(timer.fire_at).getTime() - Date.now();
       if (delay <= 0) continue;
 
+      // ✅ FIX: room_id is now read back from the DB record and included in
+      // the rehydrated job payload — cleaning_overrun worker will have roomId
       const job = await queue.add(
-        { bookingId: timer.booking_id, type: timer.timer_type },
+        {
+          bookingId: timer.booking_id,
+          type:      timer.timer_type,
+          roomId:    timer.room_id ?? undefined,
+        },
         { delay, jobId: `rehydrated-${timer.id}` }
       );
 
@@ -143,21 +155,29 @@ const timersService = {
         .update({ bull_job_id: String(job.id) })
         .eq('id', timer.id);
 
-      logger.info('Timer rehydrated', { timerId: timer.id, type: timer.timer_type, delay });
+      logger.info('Timer rehydrated', {
+        timerId: timer.id,
+        type:    timer.timer_type,
+        roomId:  timer.room_id,
+        delay,
+      });
     }
   },
 
   // ── Internal helper ─────────────────────────────────────────
 
-  async _scheduleJob(bookingId, type, fireAt, delay, extra = {}) {
+  /**
+   * @param {{ bookingId, type, fireAt, delay, roomId? }} params
+   */
+  async _scheduleJob({ bookingId, type, fireAt, delay, roomId = null }) {
     const queue = getQueue(TIMER_QUEUE);
 
-    const job = await queue.add(
-      { bookingId, type, ...extra },
-      { delay }
-    );
+    const jobData = { bookingId, type };
+    if (roomId) jobData.roomId = roomId;
 
-    // Record in DB for rehydration
+    const job = await queue.add(jobData, { delay });
+
+    // ✅ FIX: room_id now persisted to DB so rehydration can reconstruct full job data
     await supabaseAdmin
       .from('timers')
       .insert({
@@ -165,6 +185,7 @@ const timersService = {
         timer_type:  type,
         fire_at:     fireAt.toISOString(),
         bull_job_id: String(job.id),
+        room_id:     roomId,   // stored for cleaning_overrun rehydration
       });
 
     return job;
