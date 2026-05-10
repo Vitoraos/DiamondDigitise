@@ -3,7 +3,8 @@
 
 const { Router } = require('express');
 const { asyncHandler } = require('../../middleware/errorHandler');
-const controller = require('./receipts.controller');
+// ✅ FIX: was require('./receipts.controller') — file is actually controller.js
+const controller = require('./controller');
 
 const router = Router();
 
