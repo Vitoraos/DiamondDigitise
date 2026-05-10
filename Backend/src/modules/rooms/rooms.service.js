@@ -10,14 +10,13 @@ const { AppError } = require('../../middleware/errorHandler');
 const logger = require('../../lib/logger');
 const timersService = require('../timers/timersService');
 
-const VALID_STATUSES = ['available', 'in_use', 'cleaning'];
+// ✅ FIX: was ['available', 'in_use', 'cleaning'] — DB enum has 'occupied' not 'in_use'
+const VALID_STATUSES = ['available', 'occupied', 'cleaning', 'maintenance'];
 
 const roomsService = {
 
   /**
    * Return all rooms joined with their category data.
-   * Includes cleaning_started_at and cleaning_eta_minutes
-   * so the frontend can compute the countdown timer.
    */
   async getAllRooms() {
     const { data, error } = await supabaseAdmin
@@ -130,16 +129,14 @@ const roomsService = {
 
   /**
    * Transition room to a new status.
-   * The DB trigger enforces valid transitions — we pre-validate here
-   * to return a helpful error message before hitting the DB.
    *
-   * When setting to 'cleaning', records cleaning_started_at.
-   * When setting to 'available' from cleaning, clears cleaning_started_at.
+   * DB enum values: available | occupied | cleaning | maintenance
+   * ✅ FIX: All references to 'in_use' replaced with 'occupied'
    *
-   * @param {string} id - room UUID
-   * @param {string} newStatus - target status
-   * @param {number|null} cleaningEtaMinutes - override ETA if setting to cleaning
-   * @param {{ id, role, fullName }} actor - admin performing the action
+   * @param {string} id
+   * @param {string} newStatus
+   * @param {number|null} cleaningEtaMinutes
+   * @param {{ id, role, fullName }} actor
    */
   async updateRoomStatus(id, newStatus, cleaningEtaMinutes, actor) {
     if (!VALID_STATUSES.includes(newStatus)) {
@@ -149,7 +146,6 @@ const roomsService = {
       );
     }
 
-    // Build update payload
     const updates = { status: newStatus };
 
     if (newStatus === 'cleaning') {
@@ -168,24 +164,21 @@ const roomsService = {
       .select()
       .single();
 
-    // 🛡️ DB-level guardrail error handling (Action #3)
     if (error) {
-      // Catch trigger rejections for invalid state transitions
       if (error.code === 'P0001' || error.message?.includes('Invalid room status transition')) {
         throw new AppError(error.message, 422, 'INVALID_TRANSITION');
       }
-      // Catch duplicate room number (unique constraint)
       if (error.code === '23505') {
-        throw new AppError(`Room number ${data?.room_number || 'unknown'} already exists`, 409);
+        throw new AppError(`Room number already exists`, 409);
       }
       throw new AppError(error.message, 500);
     }
 
     logger.info('Room status updated', {
-      roomId: id,
+      roomId:    id,
       newStatus,
-      actor: actor?.fullName,
-      role: actor?.role,
+      actor:     actor?.fullName,
+      role:      actor?.role,
     });
 
     // Schedule cleaning timer if manually set to cleaning
@@ -210,8 +203,7 @@ const roomsService = {
   },
 
   /**
-   * Delete a room. Will fail at DB level if active bookings exist
-   * (foreign key with ON DELETE RESTRICT).
+   * Delete a room. Will fail at DB level if active bookings exist.
    */
   async deleteRoom(id) {
     const { error } = await supabaseAdmin
