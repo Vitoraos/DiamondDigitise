@@ -8,6 +8,7 @@
 //   → confirmBooking() sets room to in_use, starts timers
 // ─────────────────────────────────────────────────────────────
 'use strict';
+
 const timersService = require('../timers/timersService');
 const { supabaseAdmin } = require('../../lib/supabase');
 const { AppError } = require('../../middleware/errorHandler');
@@ -37,7 +38,7 @@ const bookingsService = {
     // ── Verify room is available ─────────────────────────────
     const { data: room, error: roomErr } = await supabaseAdmin
       .from('rooms')
-      .select('id, status, categories(id, price_per_night, name)')
+      .select('id, status, room_number, categories(id, price_per_night, name)')
       .eq('id', roomId)
       .single();
 
@@ -67,43 +68,41 @@ const bookingsService = {
     const paymentRef = generatePaymentRef();
     const bookingRef = generateBookingRef();
 
-  
-// Inside createBooking(), replace the booking insert error block:
-const { data: booking, error: bookingErr } = await supabaseAdmin
-  .from('bookings')
-  .insert({
-    booking_ref:     bookingRef,
-    room_id:         roomId,
-    guest_id:        guest.id,
-    category_id:     room.categories.id,
-    price_per_night: pricePerNight,
-    num_nights:      nights,
-    total_amount:    totalAmount,
-    payment_ref:     paymentRef,
-    status:          'pending_payment',
-  })
-  .select()
-  .single();
+    const { data: booking, error: bookingErr } = await supabaseAdmin
+      .from('bookings')
+      .insert({
+        booking_ref:     bookingRef,
+        room_id:         roomId,
+        guest_id:        guest.id,
+        category_id:     room.categories.id,
+        price_per_night: pricePerNight,
+        num_nights:      nights,
+        total_amount:    totalAmount,
+        payment_ref:     paymentRef,
+        status:          'pending_payment',
+      })
+      .select()
+      .single();
 
-if (bookingErr) {
-  // 🛡️ NEW: Handle DB-level double-booking guardrail
-  if (bookingErr.code === '23505') {
-    throw new AppError(
-      'This room was just booked by another guest. Please select a different room.',
-      409,
-      'ROOM_DOUBLE_BOOKED'
-    );
-  }
-  throw new AppError('Failed to create booking', 500);
-}
+    if (bookingErr) {
+      // Handle DB-level double-booking guardrail
+      if (bookingErr.code === '23505') {
+        throw new AppError(
+          'This room was just booked by another guest. Please select a different room.',
+          409,
+          'ROOM_DOUBLE_BOOKED'
+        );
+      }
+      throw new AppError('Failed to create booking', 500);
+    }
 
     // ── Insert payment record ────────────────────────────────
     const { error: payErr } = await supabaseAdmin
       .from('payments')
       .insert({
-        booking_id:       booking.id,
-        amount_expected:  totalAmount,
-        status:           'pending',
+        booking_id:      booking.id,
+        amount_expected: totalAmount,
+        status:          'pending',
       });
 
     if (payErr) throw new AppError('Failed to initialise payment record', 500);
@@ -119,12 +118,12 @@ if (bookingErr) {
 
     // ── Return everything the payment page needs ─────────────
     return {
-      bookingId:      booking.id,
+      bookingId:    booking.id,
       bookingRef,
       paymentRef,
-      roomNumber:     room.room_number,
-      categoryName:   room.categories.name,
-      numNights:      nights,
+      roomNumber:   room.room_number,
+      categoryName: room.categories.name,
+      numNights:    nights,
       pricePerNight,
       totalAmount,
       guestName,
@@ -153,7 +152,6 @@ if (bookingErr) {
 
     // ── Guardrail: check amount ──────────────────────────────
     if (amountReceived < booking.total_amount) {
-      // Handled by payment service — it triggers the refund.
       throw new AppError('Insufficient payment', 402, 'INSUFFICIENT_PAYMENT');
     }
 
@@ -172,10 +170,11 @@ if (bookingErr) {
       })
       .eq('id', bookingId);
 
-    // ── Mark room as in_use ──────────────────────────────────
+    // ── Mark room as occupied (matches DB enum) ──────────────
+    // ✅ FIX: was 'in_use' which does not exist in DB enum — correct value is 'occupied'
     await supabaseAdmin
       .from('rooms')
-      .update({ status: 'in_use' })
+      .update({ status: 'occupied' })
       .eq('id', booking.room_id);
 
     logger.info('Booking confirmed', { bookingId, checkInAt, checkOutAt });
@@ -185,7 +184,7 @@ if (bookingErr) {
 
   /**
    * Fetch a booking by its human-readable ref.
-   * Used by the receipt page (public — no auth needed).
+   * Used by the receipt page and front-desk verify flow (public — no auth needed).
    */
   async getBookingByRef(ref) {
     const { data, error } = await supabaseAdmin
@@ -221,8 +220,8 @@ if (bookingErr) {
       .order('created_at', { ascending: false })
       .limit(200);
 
-    if (status)  query = query.eq('status', status);
-    if (roomId)  query = query.eq('room_id', roomId);
+    if (status) query = query.eq('status', status);
+    if (roomId) query = query.eq('room_id', roomId);
 
     const { data, error } = await query;
     if (error) throw new AppError(error.message, 500);
@@ -244,62 +243,59 @@ if (bookingErr) {
   },
 
   /**
-* Front-desk verifies the booking ID guest presents at reception.
-* Transitions status to checked_in, stamps verified_at/verified_by, logs audit.
-*/
-async verifyBooking(id, actor) {
-  const booking = await this.getBookingById(id);
-  
-  // Allow re-verification if already checked_in, but block invalid states
-  if (!['confirmed', 'checked_in'].includes(booking.status)) {
-    throw new AppError('Booking is not in a verifiable state', 409, 'NOT_VERIFIED');
-  }
+   * Front-desk verifies the booking ref guest presents at reception.
+   * Transitions status to checked_in, stamps verified_at/verified_by, logs audit.
+   */
+  async verifyBooking(id, actor) {
+    const booking = await this.getBookingById(id);
 
-  const now = new Date().toISOString();
+    if (!['confirmed', 'checked_in'].includes(booking.status)) {
+      throw new AppError('Booking is not in a verifiable state', 409, 'NOT_VERIFIED');
+    }
 
-  // ── 1. Update booking record with verification metadata ────
-  const { error: updateErr } = await supabaseAdmin
-    .from('bookings')
-    .update({
-      status:      'checked_in',
-      verified_at: now,
-      verified_by: actor.id
-    })
-    .eq('id', id);
-  if (updateErr) throw new AppError('Failed to verify booking', 500);
+    const now = new Date().toISOString();
 
-  // ── 2. Write audit log ────────────────────────────────────
-  await writeAuditLog({
-    actorId:   actor.id,
-    actorRole: actor.role,
-    action:    'verify_booking',
-    entity:    'bookings',
-    entityId:  id,
-    payload:   { 
-      bookingRef: booking.booking_ref,
-      previousStatus: booking.status 
-    },
-  });
+    const { error: updateErr } = await supabaseAdmin
+      .from('bookings')
+      .update({
+        status:      'checked_in',
+        verified_at: now,
+        verified_by: actor.id,
+      })
+      .eq('id', id);
 
-  logger.info('Booking verified & checked in', { 
-    bookingId: id, 
-    actor: actor.fullName,
-    verifiedAt: now 
-  });
+    if (updateErr) throw new AppError('Failed to verify booking', 500);
 
-  return {
-    valid:       true,
-    bookingRef:  booking.booking_ref,
-    guestName:   booking.guests.name,
-    roomNumber:  booking.rooms.room_number,
-    checkInAt:   booking.check_in_at,
-    checkOutAt:  booking.check_out_at,
-    numNights:   booking.num_nights,
-    totalAmount: booking.total_amount,
-    verifiedAt: now
-  };
-},
+    await writeAuditLog({
+      actorId:   actor.id,
+      actorRole: actor.role,
+      action:    'verify_booking',
+      entity:    'bookings',
+      entityId:  id,
+      payload:   {
+        bookingRef:     booking.booking_ref,
+        previousStatus: booking.status,
+      },
+    });
 
+    logger.info('Booking verified & checked in', {
+      bookingId:  id,
+      actor:      actor.fullName,
+      verifiedAt: now,
+    });
+
+    return {
+      valid:       true,
+      bookingRef:  booking.booking_ref,
+      guestName:   booking.guests.name,
+      roomNumber:  booking.rooms.room_number,
+      checkInAt:   booking.check_in_at,
+      checkOutAt:  booking.check_out_at,
+      numNights:   booking.num_nights,
+      totalAmount: booking.total_amount,
+      verifiedAt:  now,
+    };
+  },
 
   async cancelBooking(id, actor) {
     const { data, error } = await supabaseAdmin
@@ -322,77 +318,77 @@ async verifyBooking(id, actor) {
 
     return data;
   },
+
+  /**
+   * Front-desk checks out a guest.
+   * Transitions booking to checked_out, room to cleaning, starts 80m cleaning timer.
+   *
+   * ✅ FIX: was defined outside the bookingsService object — now correctly inside
+   *
+   * @param {string} id - booking UUID
+   * @param {{ id, role, fullName }} actor
+   */
+  async checkoutBooking(id, actor) {
+    const booking = await this.getBookingById(id);
+
+    if (booking.status !== 'checked_in') {
+      throw new AppError('Booking is not in checked_in state', 409, 'NOT_CHECKED_IN');
+    }
+
+    const now    = new Date().toISOString();
+    const roomId = booking.room_id;
+
+    // ── 1. Update booking status ──────────────────────────────
+    const { error: bookingErr } = await supabaseAdmin
+      .from('bookings')
+      .update({ status: 'checked_out' })
+      .eq('id', id);
+
+    if (bookingErr) throw new AppError('Failed to update booking status', 500);
+
+    // ── 2. Transition room to cleaning ────────────────────────
+    const { error: roomErr } = await supabaseAdmin
+      .from('rooms')
+      .update({
+        status:              'cleaning',
+        cleaning_started_at: now,
+      })
+      .eq('id', roomId);
+
+    if (roomErr) throw new AppError('Failed to update room status', 500);
+
+    // ── 3. Schedule 80-minute cleaning overrun timer ─────────
+    await timersService.scheduleCleaningTimer(roomId, id, new Date(now));
+
+    // ── 4. Audit log ─────────────────────────────────────────
+    await writeAuditLog({
+      actorId:   actor.id,
+      actorRole: actor.role,
+      action:    'checkout_booking',
+      entity:    'bookings',
+      entityId:  id,
+      payload:   {
+        roomNumber: booking.rooms.room_number,
+        bookingRef: booking.booking_ref,
+      },
+    });
+
+    logger.info('Booking checked out & room cleaning started', {
+      bookingId: id,
+      roomId,
+      actor:     actor.fullName,
+    });
+
+    return {
+      success:           true,
+      bookingId:         id,
+      roomId,
+      cleaningStartedAt: now,
+      cleaningOverrunAt: new Date(
+        new Date(now).getTime() + 80 * 60_000
+      ).toISOString(),
+    };
+  },
 };
-
-// ── ADD THIS METHOD TO bookingsService ──
-/**
- * Front-desk checks out a guest.
- * Transitions booking to checked_out, room to cleaning, and starts 80m cleaning timer.
- * @param {string} id - booking UUID
- * @param {{ id, role, fullName }} actor - admin performing checkout
- */
-async checkoutBooking(id, actor) {
-  const booking = await this.getBookingById(id);
-  
-  // Guard: Only checked_in bookings can be processed for checkout
-  if (booking.status !== 'checked_in') {
-    throw new AppError('Booking is not in checked_in state', 409, 'NOT_CHECKED_IN');
-  }
-
-  const now = new Date().toISOString();
-  const roomId = booking.room_id;
-
-  // ── 1. Update booking status ──────────────────────────────
-  const { error: bookingErr } = await supabaseAdmin
-    .from('bookings')
-    .update({ status: 'checked_out' })
-    .eq('id', id);
-  if (bookingErr) throw new AppError('Failed to update booking status', 500);
-
-  // ── 2. Transition room to cleaning ────────────────────────
-  // Sets status='cleaning' and records cleaning_started_at
-  const { error: roomErr } = await supabaseAdmin
-    .from('rooms')
-    .update({ 
-      status: 'cleaning', 
-      cleaning_started_at: now 
-    })
-    .eq('id', roomId);
-  if (roomErr) throw new AppError('Failed to update room status', 500);
-
-  // ── 3. Schedule 80-minute cleaning overrun timer ─────────
-  // Uses the exact bookingId for audit context
-  await timersService.scheduleCleaningTimer(roomId, id, new Date(now));
-
-  // ── 4. Audit log ─────────────────────────────────────────
-  await writeAuditLog({
-    actorId:   actor.id,
-    actorRole: actor.role,
-    action:    'checkout_booking',
-    entity:    'bookings',
-    entityId:  id,
-    payload:   { 
-      roomNumber: booking.rooms.room_number,
-      bookingRef: booking.booking_ref 
-    },
-  });
-
-  logger.info('Booking checked out & room cleaning started', {
-    bookingId: id,
-    roomId,
-    actor: actor.fullName,
-  });
-
-  return {
-    success: true,
-    bookingId: id,
-    roomId,
-    cleaningStartedAt: now,
-    cleaningOverrunAt: new Date(
-      new Date(now).getTime() + 80 * 60_000
-    ).toISOString(),
-  };
-}
-
 
 module.exports = bookingsService;
