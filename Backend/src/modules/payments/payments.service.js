@@ -15,7 +15,7 @@ const { AppError } = require('../../middleware/errorHandler');
 const config = require('../../config');
 const logger = require('../../lib/logger');
 const bookingsService    = require('../bookings/bookingsService');
-const receiptsService    = require('../receipts/receiptsService');
+const receiptsService    = require('../receipts/receipts.service');
 const timersService      = require('../timers/timersService');
 const notificationService = require('../notifications/notificationService');
 
