@@ -51,7 +51,7 @@ function startTimerWorker() {
 
         const roomStatus = booking.rooms?.status;
 
-        if (roomStatus === 'in_use') {
+        if (roomStatus === 'occupied') {
           // Room still occupied — alert owner
           await notificationService.notifyStayOverrun({
             bookingRef:  booking.booking_ref,
