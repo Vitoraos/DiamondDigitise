@@ -1,12 +1,6 @@
 // src/modules/timers/timers.service.js
 // ─────────────────────────────────────────────────────────────
-// Schedules and cancels Bull jobs for all time-based events:
-//   stay_end          → fires at check_out_at (for record keeping)
-//   stay_overrun      → fires at check_out_at + 1hr → alert owner
-//   cleaning_overrun  → fires at cleaning_started_at + 80min → alert owner
-//
-// All jobs are also recorded in the `timers` DB table so they
-// can be re-queued after a Render restart.
+// Schedules and cancels Bull jobs for all time-based events.
 // ─────────────────────────────────────────────────────────────
 'use strict';
 
@@ -22,10 +16,6 @@ const timersService = {
 
   /**
    * Schedule all timers for a confirmed booking.
-   * Called by payment service after full payment confirmed.
-   *
-   * @param {string} bookingId
-   * @param {string|Date} checkOutAt  — ISO timestamp
    */
   async scheduleBookingTimers(bookingId, checkOutAt) {
     const checkOutDate = new Date(checkOutAt);
@@ -54,13 +44,12 @@ const timersService = {
 
   /**
    * Schedule a cleaning overrun timer.
-   * Called when admin sets a room to 'cleaning' or guest checks out.
-   *
-   * @param {string} roomId
-   * @param {string|null} bookingId  — most recent booking for context
-   * @param {Date}   cleaningStartedAt
+   * Cancels any existing cleaning timer for the same room first.
    */
   async scheduleCleaningTimer(roomId, bookingId, cleaningStartedAt) {
+    // Cancel previous unfired cleaning timer to prevent duplicates
+    await this.cancelCleaningTimersForRoom(roomId);
+
     const fireAt = new Date(
       cleaningStartedAt.getTime() + config.timers.cleaningOverrunMinutes * 60_000
     );
@@ -68,8 +57,6 @@ const timersService = {
 
     if (delay <= 0) return;
 
-    // ✅ FIX: roomId is now passed into _scheduleJob and stored in the DB record
-    // so that rehydrateTimers() can reconstruct the full job data after a restart
     await this._scheduleJob({
       bookingId,
       type:   'cleaning_overrun',
@@ -79,6 +66,37 @@ const timersService = {
     });
 
     logger.info('Cleaning overrun timer scheduled', { roomId, bookingId, fireAt });
+  },
+
+  /**
+   * Cancel all unfired cleaning_overrun timers for a specific room.
+   */
+  async cancelCleaningTimersForRoom(roomId) {
+    const { data: timers } = await supabaseAdmin
+      .from('timers')
+      .select('id, bull_job_id')
+      .eq('room_id', roomId)
+      .eq('timer_type', 'cleaning_overrun')
+      .eq('fired', false);
+
+    if (!timers?.length) return;
+
+    const queue = getQueue(TIMER_QUEUE);
+    for (const timer of timers) {
+      try {
+        const job = await queue.getJob(timer.bull_job_id);
+        if (job) await job.remove();
+      } catch (err) {
+        logger.warn('Could not remove old cleaning job', { jobId: timer.bull_job_id });
+      }
+    }
+
+    await supabaseAdmin
+      .from('timers')
+      .update({ fired: true, fired_at: new Date().toISOString() })
+      .eq('room_id', roomId)
+      .eq('timer_type', 'cleaning_overrun')
+      .eq('fired', false);
   },
 
   /**
@@ -114,7 +132,6 @@ const timersService = {
 
   /**
    * Re-queues any unfired timers on server startup.
-   * Protects against job loss when Render restarts the container.
    */
   async rehydrateTimers() {
     const { data: pendingTimers } = await supabaseAdmin
@@ -139,8 +156,6 @@ const timersService = {
       const delay = new Date(timer.fire_at).getTime() - Date.now();
       if (delay <= 0) continue;
 
-      // ✅ FIX: room_id is now read back from the DB record and included in
-      // the rehydrated job payload — cleaning_overrun worker will have roomId
       const job = await queue.add(
         {
           bookingId: timer.booking_id,
@@ -166,9 +181,6 @@ const timersService = {
 
   // ── Internal helper ─────────────────────────────────────────
 
-  /**
-   * @param {{ bookingId, type, fireAt, delay, roomId? }} params
-   */
   async _scheduleJob({ bookingId, type, fireAt, delay, roomId = null }) {
     const queue = getQueue(TIMER_QUEUE);
 
@@ -177,7 +189,6 @@ const timersService = {
 
     const job = await queue.add(jobData, { delay });
 
-    // ✅ FIX: room_id now persisted to DB so rehydration can reconstruct full job data
     await supabaseAdmin
       .from('timers')
       .insert({
@@ -185,7 +196,7 @@ const timersService = {
         timer_type:  type,
         fire_at:     fireAt.toISOString(),
         bull_job_id: String(job.id),
-        room_id:     roomId,   // stored for cleaning_overrun rehydration
+        room_id:     roomId,
       });
 
     return job;
