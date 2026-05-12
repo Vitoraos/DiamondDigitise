@@ -52,7 +52,6 @@ const adminService = {
     }
 
     // Only manager and front_desk can be assigned through the app.
-    // 'owner' is set once via the bootstrap SQL INSERT — never through this endpoint.
     if (!ASSIGNABLE_ROLES.includes(role)) {
       throw new AppError(
         `Invalid role. Assignable roles are: ${ASSIGNABLE_ROLES.join(', ')}`,
@@ -61,17 +60,15 @@ const adminService = {
       );
     }
 
-    // Prevent duplicate invites — check if email already exists in admin_users
-    // by checking Supabase auth first
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-    const alreadyExists = existingUsers?.users?.some(u => u.email === email);
-    if (alreadyExists) {
-      throw new AppError('A user with this email already exists', 409, 'USER_EXISTS');
-    }
-
-    // Create Supabase auth user (sends invite email)
+    // Create Supabase auth user (sends invite email) — duplicate detection is built-in
     const { data: authUser, error: authErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(email);
-    if (authErr) throw new AppError(`Failed to invite user: ${authErr.message}`, 500);
+    if (authErr) {
+      // If it's a duplicate, Supabase returns a specific message
+      if (authErr.message?.includes('email already exists')) {
+        throw new AppError('A user with this email already exists', 409, 'USER_EXISTS');
+      }
+      throw new AppError(`Failed to invite user: ${authErr.message}`, 500);
+    }
 
     const { data, error } = await supabaseAdmin
       .from('admin_users')
@@ -95,7 +92,6 @@ const adminService = {
     const updates = {};
 
     if (role !== undefined) {
-      // Same rule as creation — cannot assign or change to 'owner' via the app
       if (!ASSIGNABLE_ROLES.includes(role)) {
         throw new AppError(
           `Invalid role. Assignable roles are: ${ASSIGNABLE_ROLES.join(', ')}`,
@@ -106,7 +102,7 @@ const adminService = {
       updates.role = role;
     }
 
-    // Prevent the owner from deactivating themselves — that would lock everyone out
+    // Prevent the owner from deactivating themselves
     if (isActive === false && id === actor.id) {
       throw new AppError('You cannot deactivate your own account', 400, 'SELF_DEACTIVATION');
     }
@@ -144,7 +140,7 @@ const adminService = {
       throw new AppError('You cannot deactivate your own account', 400, 'SELF_DEACTIVATION');
     }
 
-    // Confirm target is not the owner — owners cannot be deactivated through the app
+    // Confirm target is not the owner
     const { data: target } = await supabaseAdmin
       .from('admin_users')
       .select('role, full_name')
