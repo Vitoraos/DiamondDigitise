@@ -21,11 +21,8 @@ const bookingsService = {
   /**
    * Create a booking from the guest checkout form.
    * Does NOT confirm the room — that happens after payment.
-   *
-   * @param {{ roomId, guestName, guestPhone, guestEmail, numNights }} body
    */
   async createBooking({ roomId, guestName, guestPhone, guestEmail, numNights }) {
-    // ── Validate inputs ──────────────────────────────────────
     if (!roomId || !guestName || !guestPhone || !numNights) {
       throw new AppError('roomId, guestName, guestPhone, numNights are required', 400);
     }
@@ -35,7 +32,7 @@ const bookingsService = {
       throw new AppError('numNights must be between 1 and 30', 400);
     }
 
-    // ── Verify room is available ─────────────────────────────
+    // Verify room availability
     const { data: room, error: roomErr } = await supabaseAdmin
       .from('rooms')
       .select('id, status, room_number, categories(id, price_per_night, name)')
@@ -47,12 +44,10 @@ const bookingsService = {
       throw new AppError('Room is not available for booking', 409, 'ROOM_UNAVAILABLE');
     }
 
-    // ── Snapshot price at booking time ───────────────────────
     const pricePerNight = parseFloat(room.categories.price_per_night);
     const totalAmount   = pricePerNight * nights;
 
-    // ── Create or find guest ─────────────────────────────────
-    // Upsert by phone so repeat guests aren't duplicated
+    // Create or find guest by phone
     const { data: guest, error: guestErr } = await supabaseAdmin
       .from('guests')
       .upsert(
@@ -64,7 +59,6 @@ const bookingsService = {
 
     if (guestErr) throw new AppError('Failed to save guest details', 500);
 
-    // ── Generate unique refs ─────────────────────────────────
     const paymentRef = generatePaymentRef();
     const bookingRef = generateBookingRef();
 
@@ -85,7 +79,6 @@ const bookingsService = {
       .single();
 
     if (bookingErr) {
-      // Handle DB-level double-booking guardrail
       if (bookingErr.code === '23505') {
         throw new AppError(
           'This room was just booked by another guest. Please select a different room.',
@@ -96,7 +89,6 @@ const bookingsService = {
       throw new AppError('Failed to create booking', 500);
     }
 
-    // ── Insert payment record ────────────────────────────────
     const { error: payErr } = await supabaseAdmin
       .from('payments')
       .insert({
@@ -116,7 +108,6 @@ const bookingsService = {
       total: totalAmount,
     });
 
-    // ── Return everything the payment page needs ─────────────
     return {
       bookingId:    booking.id,
       bookingRef,
@@ -132,11 +123,6 @@ const bookingsService = {
 
   /**
    * Called by payment service after Monnify confirms payment.
-   * Locks the room, sets stay window, schedules timers.
-   *
-   * @param {string} bookingId
-   * @param {number} amountReceived
-   * @param {string} monnifyRef
    */
   async confirmBooking(bookingId, amountReceived, monnifyRef) {
     const { data: booking, error } = await supabaseAdmin
@@ -150,17 +136,14 @@ const bookingsService = {
       throw new AppError('Booking is not awaiting payment', 409);
     }
 
-    // ── Guardrail: check amount ──────────────────────────────
     if (amountReceived < booking.total_amount) {
       throw new AppError('Insufficient payment', 402, 'INSUFFICIENT_PAYMENT');
     }
 
-    // ── Set stay window ──────────────────────────────────────
     const checkInAt  = new Date();
     const checkOutAt = new Date(checkInAt);
     checkOutAt.setHours(checkOutAt.getHours() + booking.num_nights * 24);
 
-    // ── Update booking ───────────────────────────────────────
     await supabaseAdmin
       .from('bookings')
       .update({
@@ -170,8 +153,6 @@ const bookingsService = {
       })
       .eq('id', bookingId);
 
-    // ── Mark room as occupied (matches DB enum) ──────────────
-    // ✅ FIX: was 'in_use' which does not exist in DB enum — correct value is 'occupied'
     await supabaseAdmin
       .from('rooms')
       .update({ status: 'occupied' })
@@ -184,7 +165,6 @@ const bookingsService = {
 
   /**
    * Fetch a booking by its human-readable ref.
-   * Used by the receipt page and front-desk verify flow (public — no auth needed).
    */
   async getBookingByRef(ref) {
     const { data, error } = await supabaseAdmin
@@ -244,12 +224,12 @@ const bookingsService = {
 
   /**
    * Front-desk verifies the booking ref guest presents at reception.
-   * Transitions status to checked_in, stamps verified_at/verified_by, logs audit.
+   * Only allowed if status is 'confirmed' (prevents double verification).
    */
   async verifyBooking(id, actor) {
     const booking = await this.getBookingById(id);
 
-    if (!['confirmed', 'checked_in'].includes(booking.status)) {
+    if (booking.status !== 'confirmed') {
       throw new AppError('Booking is not in a verifiable state', 409, 'NOT_VERIFIED');
     }
 
@@ -322,11 +302,6 @@ const bookingsService = {
   /**
    * Front-desk checks out a guest.
    * Transitions booking to checked_out, room to cleaning, starts 80m cleaning timer.
-   *
-   * ✅ FIX: was defined outside the bookingsService object — now correctly inside
-   *
-   * @param {string} id - booking UUID
-   * @param {{ id, role, fullName }} actor
    */
   async checkoutBooking(id, actor) {
     const booking = await this.getBookingById(id);
@@ -338,7 +313,6 @@ const bookingsService = {
     const now    = new Date().toISOString();
     const roomId = booking.room_id;
 
-    // ── 1. Update booking status ──────────────────────────────
     const { error: bookingErr } = await supabaseAdmin
       .from('bookings')
       .update({ status: 'checked_out' })
@@ -346,7 +320,6 @@ const bookingsService = {
 
     if (bookingErr) throw new AppError('Failed to update booking status', 500);
 
-    // ── 2. Transition room to cleaning ────────────────────────
     const { error: roomErr } = await supabaseAdmin
       .from('rooms')
       .update({
@@ -357,10 +330,8 @@ const bookingsService = {
 
     if (roomErr) throw new AppError('Failed to update room status', 500);
 
-    // ── 3. Schedule 80-minute cleaning overrun timer ─────────
     await timersService.scheduleCleaningTimer(roomId, id, new Date(now));
 
-    // ── 4. Audit log ─────────────────────────────────────────
     await writeAuditLog({
       actorId:   actor.id,
       actorRole: actor.role,
