@@ -129,13 +129,19 @@ const paymentsService = {
 
   /**
    * Full payment path:
-   * - Update payment record
-   * - Confirm booking (sets room to in_use, sets stay window)
-   * - Generate receipt
-   * - Schedule timers
+   * - Confirm booking first (so we don't have a half-confirmed state)
+   * - Then update payment record
+   * - Generate receipt & schedule timers
    */
   async _handleFullPayment(booking, payment, amountReceived, monnifyRef) {
-    // Update payment record
+    // 1. Confirm booking (this can throw – payment stays untouched)
+    const { checkInAt, checkOutAt, bookingRef } = await bookingsService.confirmBooking(
+      booking.id,
+      amountReceived,
+      monnifyRef
+    );
+
+    // 2. Now update payment record
     await supabaseAdmin
       .from('payments')
       .update({
@@ -146,26 +152,19 @@ const paymentsService = {
       })
       .eq('id', payment.id);
 
-    // Confirm booking + set room in_use + get stay window
-    const { checkInAt, checkOutAt, bookingRef } = await bookingsService.confirmBooking(
-      booking.id,
-      amountReceived,
-      monnifyRef
-    );
-
-    // Generate receipt
+    // 3. Generate receipt
     await receiptsService.generateReceipt(booking.id);
 
-    // Schedule timers
+    // 4. Schedule timers
     await timersService.scheduleBookingTimers(booking.id, checkOutAt);
 
-     await notificationService.notifyNewBooking({
-     bookingRef:  bookingRef,
-     guestName:   booking.guests?.name,
-     roomNumber:  booking.rooms?.room_number,
-     totalAmount: booking.total_amount,
-     numNights:   booking.num_nights,
-   });
+    await notificationService.notifyNewBooking({
+      bookingRef:  bookingRef,
+      guestName:   booking.guests?.name,
+      roomNumber:  booking.rooms?.room_number,
+      totalAmount: booking.total_amount,
+      numNights:   booking.num_nights,
+    });
 
     logger.info('Payment confirmed and booking activated', {
       bookingId: booking.id,
@@ -175,36 +174,35 @@ const paymentsService = {
 
   /**
    * Incomplete payment path:
-   * - Flag booking as incomplete_payment
-   * - Update payment record with shortfall
-   * - Trigger Monnify refund (amount - ₦50 fee)
-   * - Notify guest via response (frontend shows the message)
+   * - Record payment details and mark booking as incomplete
+   * - Attempt refund
+   * - If refund succeeds, update payment status to partial_refunded
    */
   async _handleIncompletePayment(booking, payment, amountReceived, monnifyRef, tx) {
     const shortfall    = booking.total_amount - amountReceived;
     const refundFeeNaira = config.monnify.refundFeeKobo / 100;
     const refundAmount = Math.max(0, amountReceived - refundFeeNaira);
 
-    // Update payment record
+    // 1. Save received amount and shortfall (status stays 'incomplete' until refund)
     await supabaseAdmin
       .from('payments')
       .update({
-        status:          'partial_refunded',
         amount_received: amountReceived,
-        monnify_ref:     monnifyRef,
         shortfall,
-        refund_amount:   refundAmount,
+        monnify_ref:     monnifyRef,
         monnify_response: tx,
+        status:          'incomplete',   // new status to differentiate from pending
       })
       .eq('id', payment.id);
 
-    // Flag booking
+    // 2. Flag booking so guest cannot proceed
     await supabaseAdmin
       .from('bookings')
       .update({ status: 'incomplete_payment' })
       .eq('id', booking.id);
 
-    // Trigger Monnify refund
+    // 3. Try to refund
+    let refundedAt = null;
     try {
       await monnifyPost('/api/v1/refunds/initiate-refund', {
         transactionReference: monnifyRef,
@@ -213,14 +211,9 @@ const paymentsService = {
         contractCode:         config.monnify.contractCode,
         customerNote:         `Your payment of ₦${amountReceived} was less than the required ₦${booking.total_amount}. A refund of ₦${refundAmount} (after ₦${refundFeeNaira} processing fee) has been initiated.`,
       });
-
-      await supabaseAdmin
-        .from('payments')
-        .update({ refunded_at: new Date().toISOString() })
-        .eq('id', payment.id);
-
+      refundedAt = new Date().toISOString();
     } catch (err) {
-      // Refund API failure — log for manual processing, don't crash
+      // Refund API failure — log and notify, but payment already recorded
       logger.error('Monnify refund failed — manual action required', {
         bookingId:   booking.id,
         monnifyRef,
@@ -228,9 +221,22 @@ const paymentsService = {
         refundAmount,
         error:       err.message,
       });
+      // Do not update payment status – it stays 'incomplete'
     }
 
-    // Notify owner of the incomplete payment
+    // 4. If refund succeeded, update payment status
+    if (refundedAt) {
+      await supabaseAdmin
+        .from('payments')
+        .update({
+          status:       'partial_refunded',
+          refund_amount: refundAmount,
+          refunded_at:  refundedAt,
+        })
+        .eq('id', payment.id);
+    }
+
+    // 5. Notify owner
     await notificationService.notifyIncompletePayment({
       bookingRef:    booking.payment_ref,
       amountExpected: booking.total_amount,
@@ -244,6 +250,7 @@ const paymentsService = {
       amountReceived,
       shortfall,
       refundAmount,
+      refunded: !!refundedAt,
     });
   },
 
