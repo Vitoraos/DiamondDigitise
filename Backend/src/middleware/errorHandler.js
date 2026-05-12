@@ -24,7 +24,6 @@ class AppError extends Error {
 
 /**
  * Wraps async route handlers so errors propagate to errorHandler.
- * Usage: router.get('/rooms', asyncHandler(roomController.list))
  */
 function asyncHandler(fn) {
   return (req, res, next) => {
@@ -36,6 +35,11 @@ function asyncHandler(fn) {
  * Express error handler — must be registered LAST in app.js.
  */
 function errorHandler(err, req, res, next) { // eslint-disable-line no-unused-vars
+  // CORS rejection should return 403
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({ error: 'CORS not allowed' });
+  }
+
   // Supabase errors have a specific shape
   if (err.code === 'PGRST116') {
     return res.status(404).json({ error: 'Resource not found' });
