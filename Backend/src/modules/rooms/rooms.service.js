@@ -1,7 +1,6 @@
 // src/modules/rooms/rooms.service.js
 // ─────────────────────────────────────────────────────────────
 // All room business logic lives here.
-// Controllers call this. Nothing else touches the DB directly.
 // ─────────────────────────────────────────────────────────────
 'use strict';
 
@@ -10,14 +9,10 @@ const { AppError } = require('../../middleware/errorHandler');
 const logger = require('../../lib/logger');
 const timersService = require('../timers/timersService');
 
-// ✅ FIX: was ['available', 'in_use', 'cleaning'] — DB enum has 'occupied' not 'in_use'
 const VALID_STATUSES = ['available', 'occupied', 'cleaning', 'maintenance'];
 
 const roomsService = {
 
-  /**
-   * Return all rooms joined with their category data.
-   */
   async getAllRooms() {
     const { data, error } = await supabaseAdmin
       .from('rooms')
@@ -43,9 +38,6 @@ const roomsService = {
     return data;
   },
 
-  /**
-   * Return active categories with prices, ordered for UI display.
-   */
   async getCategories() {
     const { data, error } = await supabaseAdmin
       .from('categories')
@@ -57,9 +49,6 @@ const roomsService = {
     return data;
   },
 
-  /**
-   * Return a single room by UUID.
-   */
   async getRoomById(id) {
     const { data, error } = await supabaseAdmin
       .from('rooms')
@@ -75,10 +64,6 @@ const roomsService = {
     return data;
   },
 
-  /**
-   * Create a new room.
-   * @param {{ room_number, category_id, floor?, notes? }} body
-   */
   async createRoom(body) {
     const { room_number, category_id, floor, notes } = body;
 
@@ -103,9 +88,6 @@ const roomsService = {
     return data;
   },
 
-  /**
-   * Update room details (not status — use updateRoomStatus for that).
-   */
   async updateRoom(id, body) {
     const allowed = ['floor', 'notes', 'cleaning_eta_minutes'];
     const updates = Object.fromEntries(
@@ -129,16 +111,18 @@ const roomsService = {
 
   /**
    * Transition room to a new status.
-   *
-   * DB enum values: available | occupied | cleaning | maintenance
-   * ✅ FIX: All references to 'in_use' replaced with 'occupied'
-   *
-   * @param {string} id
-   * @param {string} newStatus
-   * @param {number|null} cleaningEtaMinutes
-   * @param {{ id, role, fullName }} actor
+   * Manual transitions to 'cleaning' are forbidden — only checkout triggers it.
    */
   async updateRoomStatus(id, newStatus, cleaningEtaMinutes, actor) {
+    // 🚫 Cleaning must only be triggered automatically at checkout
+    if (newStatus === 'cleaning') {
+      throw new AppError(
+        'Room cleaning is triggered automatically on guest checkout. It cannot be set manually.',
+        400,
+        'CLEANING_AUTO_ONLY'
+      );
+    }
+
     if (!VALID_STATUSES.includes(newStatus)) {
       throw new AppError(
         `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
@@ -147,11 +131,6 @@ const roomsService = {
     }
 
     const updates = { status: newStatus };
-
-    if (newStatus === 'cleaning') {
-      updates.cleaning_started_at = new Date().toISOString();
-      if (cleaningEtaMinutes) updates.cleaning_eta_minutes = cleaningEtaMinutes;
-    }
 
     if (newStatus === 'available') {
       updates.cleaning_started_at = null;
@@ -181,30 +160,9 @@ const roomsService = {
       role:      actor?.role,
     });
 
-    // Schedule cleaning timer if manually set to cleaning
-    if (newStatus === 'cleaning' && data.cleaning_started_at) {
-      const { data: lastBooking } = await supabaseAdmin
-        .from('bookings')
-        .select('id')
-        .eq('room_id', id)
-        .in('status', ['confirmed', 'checked_in', 'checked_out'])
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-
-      await timersService.scheduleCleaningTimer(
-        id,
-        lastBooking?.id ?? null,
-        new Date(data.cleaning_started_at)
-      );
-    }
-
     return data;
   },
 
-  /**
-   * Delete a room. Will fail at DB level if active bookings exist.
-   */
   async deleteRoom(id) {
     const { error } = await supabaseAdmin
       .from('rooms')
