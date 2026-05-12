@@ -31,8 +31,11 @@ function createApp() {
   app.use(cors({
     origin: (origin, cb) => {
       if (!origin) return cb(null, true);
-      if (config.cors.allowedOrigins.includes(origin)) return cb(null, true);
-      cb(new Error(`CORS blocked: ${origin}`));
+      if (config.cors.allowedOrigins.includes(origin)) {
+        return cb(null, true);
+      }
+      // Reject with a specific error to be handled by errorHandler
+      cb(new Error('Not allowed by CORS'));
     },
     credentials: true,
   }));
