@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
@@ -26,10 +25,16 @@ export function useAuth() {
     if (error) throw error;
   };
 
+  const signInWithEmailPassword = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return data;
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
     window.location.href = '/login';
   };
 
-  return { user, loading, signInWithEmail, signOut };
+  return { user, loading, signInWithEmail, signInWithEmailPassword, signOut };
 }
