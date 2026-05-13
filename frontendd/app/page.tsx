@@ -1,18 +1,11 @@
-
 'use client';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
 
-export default function Home() {
-  const { user, loading } = useAuth();
+export default function RootPage() {
   const router = useRouter();
-
   useEffect(() => {
-    if (!loading) {
-      router.replace(user ? '/admin/dashboard' : '/login');
-    }
-  }, [user, loading, router]);
-
-  return <div className="min-h-screen flex items-center justify-center">Redirecting...</div>;
+    router.replace('/');
+  }, [router]);
+  return null;
 }
