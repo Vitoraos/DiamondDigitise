@@ -1,26 +1,29 @@
 'use client';
 import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
-  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const { signInWithEmail } = useAuth();
+  const { signInWithEmailPassword } = useAuth();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const expired = searchParams.get('expired') === 'true';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setStatus('sending');
+    setLoading(true);
     setErrorMsg('');
     try {
-      await signInWithEmail(email);
-      setStatus('sent');
+      await signInWithEmailPassword(email, password);
+      router.push('/admin/dashboard');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to send magic link');
-      setStatus('error');
+      setErrorMsg(err.message || 'Invalid email or password');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -43,18 +46,21 @@ export default function LoginPage() {
           className="w-full p-3 border border-beige-300 rounded-lg mb-4 focus:ring-2 focus:ring-gold-500 focus:border-transparent"
           required
         />
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+          className="w-full p-3 border border-beige-300 rounded-lg mb-4 focus:ring-2 focus:ring-gold-500 focus:border-transparent"
+          required
+        />
         <button
           type="submit"
-          disabled={status === 'sending'}
+          disabled={loading}
           className="w-full bg-navy-700 text-white p-3 rounded-lg hover:bg-navy-800 disabled:opacity-50 transition duration-300"
         >
-          {status === 'sending' ? 'Sending...' : status === 'sent' ? 'Check your email' : 'Send Magic Link'}
+          {loading ? 'Signing in...' : 'Sign In'}
         </button>
-        {status === 'sent' && (
-          <p className="mt-4 text-gold-700 text-sm text-center">
-            Magic link sent. Open the email to continue.
-          </p>
-        )}
         {errorMsg && (
           <p className="mt-4 text-red-700 text-sm text-center">{errorMsg}</p>
         )}
