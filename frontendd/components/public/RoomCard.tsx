@@ -10,12 +10,17 @@ interface RoomCardProps {
     status: string;
     categories: {
       name: string;
-      price_per_night: number;
+      price_per_night: string | number;
     };
   };
 }
 
 export function RoomCard({ room }: RoomCardProps) {
+  const price =
+    typeof room.categories.price_per_night === "string"
+      ? parseFloat(room.categories.price_per_night)
+      : room.categories.price_per_night;
+
   return (
     <Link href={`/room/${room.id}`}>
       <Card className="bg-white border border-beige-200 hover:shadow-lg transition-shadow cursor-pointer">
@@ -31,7 +36,7 @@ export function RoomCard({ room }: RoomCardProps) {
           </div>
           <p className="text-beige-700 text-sm mb-1">{room.categories.name}</p>
           <p className="text-navy-700 font-medium">
-            ₦{parseInt(room.categories.price_per_night).toLocaleString()}/night
+            ₦{price.toLocaleString()}/night
           </p>
           <p className="text-gray-500 text-xs mt-2">Floor {room.floor}</p>
         </CardContent>
