@@ -16,13 +16,14 @@ const roomsService = {
   async getAllRooms() {
     const { data, error } = await supabaseAdmin
       .from('rooms')
-      .select(`
+      .select(\`
         id,
         room_number,
         floor,
         status,
         cleaning_started_at,
         cleaning_eta_minutes,
+        image_urls,
         categories (
           id,
           name,
@@ -30,7 +31,7 @@ const roomsService = {
           description,
           display_order
         )
-      `)
+      \`)
       .order('floor', { ascending: true })
       .order('room_number', { ascending: true });
 
@@ -52,11 +53,12 @@ const roomsService = {
   async getRoomById(id) {
     const { data, error } = await supabaseAdmin
       .from('rooms')
-      .select(`
+      .select(\`
         id, room_number, floor, status,
         cleaning_started_at, cleaning_eta_minutes, notes,
+        image_urls,
         categories ( id, name, price_per_night, description )
-      `)
+      \`)
       .eq('id', id)
       .single();
 
@@ -65,21 +67,26 @@ const roomsService = {
   },
 
   async createRoom(body) {
-    const { room_number, category_id, floor, notes } = body;
+    const { room_number, category_id, floor, notes, image_urls } = body;
 
     if (!room_number || !category_id) {
       throw new AppError('room_number and category_id are required', 400);
     }
 
+    const insertData = { room_number, category_id, floor, notes };
+    if (image_urls && Array.isArray(image_urls)) {
+      insertData.image_urls = image_urls;
+    }
+
     const { data, error } = await supabaseAdmin
       .from('rooms')
-      .insert({ room_number, category_id, floor, notes })
+      .insert(insertData)
       .select()
       .single();
 
     if (error) {
       if (error.code === '23505') {
-        throw new AppError(`Room number ${room_number} already exists`, 409);
+        throw new AppError(\`Room number \${room_number} already exists\`, 409);
       }
       throw new AppError(error.message, 500);
     }
@@ -89,7 +96,7 @@ const roomsService = {
   },
 
   async updateRoom(id, body) {
-    const allowed = ['floor', 'notes', 'cleaning_eta_minutes'];
+    const allowed = ['floor', 'notes', 'cleaning_eta_minutes', 'image_urls'];
     const updates = Object.fromEntries(
       Object.entries(body).filter(([k]) => allowed.includes(k))
     );
@@ -109,12 +116,7 @@ const roomsService = {
     return data;
   },
 
-  /**
-   * Transition room to a new status.
-   * Manual transitions to 'cleaning' are forbidden — only checkout triggers it.
-   */
   async updateRoomStatus(id, newStatus, cleaningEtaMinutes, actor) {
-    // 🚫 Cleaning must only be triggered automatically at checkout
     if (newStatus === 'cleaning') {
       throw new AppError(
         'Room cleaning is triggered automatically on guest checkout. It cannot be set manually.',
@@ -125,13 +127,12 @@ const roomsService = {
 
     if (!VALID_STATUSES.includes(newStatus)) {
       throw new AppError(
-        `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
+        \`Invalid status. Must be one of: \${VALID_STATUSES.join(', ')}\`,
         400
       );
     }
 
     const updates = { status: newStatus };
-
     if (newStatus === 'available') {
       updates.cleaning_started_at = null;
     }
@@ -148,18 +149,12 @@ const roomsService = {
         throw new AppError(error.message, 422, 'INVALID_TRANSITION');
       }
       if (error.code === '23505') {
-        throw new AppError(`Room number already exists`, 409);
+        throw new AppError(\`Room number already exists\`, 409);
       }
       throw new AppError(error.message, 500);
     }
 
-    logger.info('Room status updated', {
-      roomId:    id,
-      newStatus,
-      actor:     actor?.fullName,
-      role:      actor?.role,
-    });
-
+    logger.info('Room status updated', { roomId: id, newStatus, actor: actor?.fullName });
     return data;
   },
 
