@@ -1,6 +1,6 @@
 "use client";
 
-import { RoleGate } from "@/components/shared/RoleGate";
+import { RoleGate } from "@/components/role/RoleGate";
 
 export default function AdminNotificationsPage() {
   return (
