@@ -8,6 +8,7 @@ interface RoomCardProps {
     room_number: string;
     floor: number;
     status: string;
+    image_urls?: string[];
     categories: {
       name: string;
       price_per_night: string | number;
@@ -21,11 +22,23 @@ export function RoomCard({ room }: RoomCardProps) {
       ? parseFloat(room.categories.price_per_night)
       : room.categories.price_per_night;
 
+  const imageUrl = room.image_urls?.[0] || null;
+
   return (
     <Link href={`/room/${room.id}`}>
       <Card className="bg-white border border-beige-200 hover:shadow-lg transition-shadow cursor-pointer">
-        <div className="h-40 bg-beige-100 rounded-t-lg flex items-center justify-center text-beige-400 text-sm">
-          Room Image
+        <div className="h-40 bg-beige-100 rounded-t-lg overflow-hidden">
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={`Room ${room.room_number}`}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-beige-400 text-sm">
+              Room Image
+            </div>
+          )}
         </div>
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-2">
