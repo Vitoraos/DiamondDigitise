@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useRole } from "@/hooks/useRole";
 import { useDashboard } from "@/hooks/queries/useDashboard";
 import { useRooms } from "@/hooks/queries/useRooms";
+import { usePayments } from "@/hooks/queries/usePayments";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { DashboardStats } from "@/components/admin/DashboardStats";
@@ -509,23 +510,111 @@ function BookingsSection() {
   );
 }
 
-// ── Placeholder sections ──────────────────────
+// ── Payments Section ──────────────────────────
 function PaymentsSection() {
+  const { data: payments, isLoading, error } = usePayments();
+
+  if (isLoading) return <p className="text-navy-700">Loading payments...</p>;
+  if (error) return <p className="text-red-600">Failed to load payments.</p>;
+
   return (
     <div>
       <h1 className="text-3xl font-serif font-bold text-navy-800 mb-6">Payments</h1>
-      <p className="text-navy-600">Payment list coming soon.</p>
+      <div className="overflow-x-auto bg-white rounded-lg shadow border">
+        <table className="w-full text-sm">
+          <thead className="bg-beige-100 text-left">
+            <tr>
+              <th className="p-3">Booking Ref</th>
+              <th className="p-3">Guest</th>
+              <th className="p-3">Expected</th>
+              <th className="p-3">Received</th>
+              <th className="p-3">Status</th>
+              <th className="p-3">Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {payments?.map((p: any) => (
+              <tr key={p.id} className="border-t hover:bg-beige-50">
+                <td className="p-3 font-mono text-xs">{p.bookings?.booking_ref}</td>
+                <td className="p-3">{p.bookings?.guests?.name}</td>
+                <td className="p-3">₦{parseInt(p.amount_expected).toLocaleString()}</td>
+                <td className="p-3">₦{parseInt(p.amount_received || 0).toLocaleString()}</td>
+                <td className="p-3">
+                  <StatusBadge status={p.status} />
+                </td>
+                <td className="p-3 text-xs">{new Date(p.created_at).toLocaleDateString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
+
+// ── Receipts Section ──────────────────────────
 function ReceiptsSection() {
+  const [bookingId, setBookingId] = useState("");
+  const [searched, setSearched] = useState(false);
+  const { data: receipt, isLoading, error } = useQuery({
+    queryKey: ["admin-receipt", bookingId],
+    queryFn: () => api.get(`/api/receipts/${bookingId}`).then((res) => res.data.data),
+    enabled: !!bookingId && searched,
+  });
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearched(true);
+  };
+
   return (
     <div>
       <h1 className="text-3xl font-serif font-bold text-navy-800 mb-6">Receipts</h1>
-      <p className="text-navy-600">Receipt viewer coming soon.</p>
+      <form onSubmit={handleSearch} className="flex gap-2 mb-6 max-w-md">
+        <Input
+          placeholder="Enter Booking ID (UUID)"
+          value={bookingId}
+          onChange={(e) => setBookingId(e.target.value)}
+          required
+        />
+        <Button type="submit" className="bg-gold-500 hover:bg-gold-600 text-navy-900">
+          Lookup
+        </Button>
+      </form>
+
+      {searched && isLoading && <p className="text-navy-700">Searching...</p>}
+      {searched && error && <p className="text-red-600">Receipt not found for this ID.</p>}
+      {searched && receipt && (
+        <div className="bg-white rounded-lg shadow border p-6 space-y-3">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <p className="text-navy-600 font-medium">Receipt Number</p>
+            <p className="text-navy-800">{receipt.receipt_number}</p>
+            <p className="text-navy-600 font-medium">Booking Ref</p>
+            <p className="text-navy-800">{receipt.bookings?.booking_ref}</p>
+            <p className="text-navy-600 font-medium">Guest</p>
+            <p className="text-navy-800">{receipt.bookings?.guests?.name}</p>
+            <p className="text-navy-600 font-medium">Total</p>
+            <p className="text-navy-800 font-bold">₦{parseInt(receipt.bookings?.total_amount).toLocaleString()}</p>
+          </div>
+          {receipt.pdf_url && (
+            <div className="text-center">
+              <a
+                href={receipt.pdf_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block bg-gold-500 hover:bg-gold-600 text-navy-900 px-6 py-2 rounded-lg font-semibold"
+              >
+                Download PDF
+              </a>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
+
+// ── Placeholder sections ──────────────────────
 function StaffSection() {
   return (
     <div>
