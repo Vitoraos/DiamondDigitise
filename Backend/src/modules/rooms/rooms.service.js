@@ -12,11 +12,10 @@ const timersService = require('../timers/timersService');
 const VALID_STATUSES = ['available', 'occupied', 'cleaning', 'maintenance'];
 
 const roomsService = {
-
   async getAllRooms() {
     const { data, error } = await supabaseAdmin
       .from('rooms')
-      .select(\`
+      .select(`
         id,
         room_number,
         floor,
@@ -31,7 +30,7 @@ const roomsService = {
           description,
           display_order
         )
-      \`)
+      `)
       .order('floor', { ascending: true })
       .order('room_number', { ascending: true });
 
@@ -53,12 +52,22 @@ const roomsService = {
   async getRoomById(id) {
     const { data, error } = await supabaseAdmin
       .from('rooms')
-      .select(\`
-        id, room_number, floor, status,
-        cleaning_started_at, cleaning_eta_minutes, notes,
+      .select(`
+        id,
+        room_number,
+        floor,
+        status,
+        cleaning_started_at,
+        cleaning_eta_minutes,
+        notes,
         image_urls,
-        categories ( id, name, price_per_night, description )
-      \`)
+        categories (
+          id,
+          name,
+          price_per_night,
+          description
+        )
+      `)
       .eq('id', id)
       .single();
 
@@ -74,7 +83,8 @@ const roomsService = {
     }
 
     const insertData = { room_number, category_id, floor, notes };
-    if (image_urls && Array.isArray(image_urls)) {
+
+    if (Array.isArray(image_urls)) {
       insertData.image_urls = image_urls;
     }
 
@@ -86,7 +96,7 @@ const roomsService = {
 
     if (error) {
       if (error.code === '23505') {
-        throw new AppError(\`Room number \${room_number} already exists\`, 409);
+        throw new AppError(`Room number ${room_number} already exists`, 409);
       }
       throw new AppError(error.message, 500);
     }
@@ -97,8 +107,9 @@ const roomsService = {
 
   async updateRoom(id, body) {
     const allowed = ['floor', 'notes', 'cleaning_eta_minutes', 'image_urls'];
+
     const updates = Object.fromEntries(
-      Object.entries(body).filter(([k]) => allowed.includes(k))
+      Object.entries(body).filter(([key]) => allowed.includes(key))
     );
 
     if (Object.keys(updates).length === 0) {
@@ -127,12 +138,13 @@ const roomsService = {
 
     if (!VALID_STATUSES.includes(newStatus)) {
       throw new AppError(
-        \`Invalid status. Must be one of: \${VALID_STATUSES.join(', ')}\`,
+        `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
         400
       );
     }
 
     const updates = { status: newStatus };
+
     if (newStatus === 'available') {
       updates.cleaning_started_at = null;
     }
@@ -145,16 +157,26 @@ const roomsService = {
       .single();
 
     if (error) {
-      if (error.code === 'P0001' || error.message?.includes('Invalid room status transition')) {
+      if (
+        error.code === 'P0001' ||
+        error.message?.includes('Invalid room status transition')
+      ) {
         throw new AppError(error.message, 422, 'INVALID_TRANSITION');
       }
+
       if (error.code === '23505') {
-        throw new AppError(\`Room number already exists\`, 409);
+        throw new AppError('Room number already exists', 409);
       }
+
       throw new AppError(error.message, 500);
     }
 
-    logger.info('Room status updated', { roomId: id, newStatus, actor: actor?.fullName });
+    logger.info('Room status updated', {
+      roomId: id,
+      newStatus,
+      actor: actor?.fullName,
+    });
+
     return data;
   },
 
@@ -168,6 +190,7 @@ const roomsService = {
       if (error.code === '23503') {
         throw new AppError('Cannot delete room with active bookings', 409);
       }
+
       throw new AppError(error.message, 500);
     }
   },
