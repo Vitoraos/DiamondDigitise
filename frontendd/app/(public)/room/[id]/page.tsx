@@ -71,11 +71,33 @@ export default function RoomDetailPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10 grid grid-cols-1 md:grid-cols-2 gap-8">
-      {/* Left: room info */}
+      {/* Left: room images */}
       <div>
-        <div className="h-64 bg-beige-100 rounded-lg flex items-center justify-center text-beige-400 mb-4">
-          Room Image
-        </div>
+        {room.image_urls && room.image_urls.length > 0 ? (
+          <div className="rounded-lg overflow-hidden">
+            <img
+              src={room.image_urls[0]}
+              alt={`Room ${room.room_number}`}
+              className="w-full h-64 object-cover"
+            />
+            {room.image_urls.length > 1 && (
+              <div className="flex gap-2 mt-2 overflow-x-auto">
+                {room.image_urls.map((url: string, i: number) => (
+                  <img
+                    key={i}
+                    src={url}
+                    alt={`Room ${room.room_number} ${i + 1}`}
+                    className="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-80"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="h-64 bg-beige-100 rounded-lg flex items-center justify-center text-beige-400 mb-4">
+            Room Image
+          </div>
+        )}
         <StatusBadge status={room.status} />
         <h1 className="text-3xl font-serif font-bold text-navy-800 mt-2">
           Room {room.room_number}
