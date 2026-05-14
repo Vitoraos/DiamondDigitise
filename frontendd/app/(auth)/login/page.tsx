@@ -19,7 +19,7 @@ export default function LoginPage() {
     setErrorMsg('');
     try {
       await signInWithEmailPassword(email, password);
-      router.push('/admin/dashboard');
+      router.push('/admin-dashboard');
     } catch (err: any) {
       setErrorMsg(err.message || 'Invalid email or password');
     } finally {
