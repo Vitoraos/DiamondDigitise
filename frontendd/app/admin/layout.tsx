@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,8 +20,8 @@ export default function AdminLayout({
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-beige-50">
-        <p className="text-navy-700 animate-pulse">Checking permissions…</p>
+      <div className="min-h-screen flex items-center justify-center bg-alabaster-50">
+        <div className="w-8 h-8 border-2 border-midnight-900 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -30,9 +29,12 @@ export default function AdminLayout({
   if (!user) return null;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-beige-50">
+    <div className="flex h-screen overflow-hidden bg-alabaster-50">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto p-6 lg:p-8">{children}</main>
+      {/* Added lg:pl-24 to prevent content from hiding behind floating sidebar */}
+      <main className="flex-1 overflow-y-auto p-6 lg:p-10 lg:pl-24">
+        <div className="max-w-7xl mx-auto">{children}</div>
+      </main>
     </div>
   );
 }
