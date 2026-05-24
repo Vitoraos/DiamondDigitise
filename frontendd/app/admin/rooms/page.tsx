@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/utils"; // ✅ ADD THIS IMPORT
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import toast from "react-hot-toast";
