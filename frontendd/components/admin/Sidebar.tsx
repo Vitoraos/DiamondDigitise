@@ -60,9 +60,10 @@ export function Sidebar() {
       <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-white border-t border-alabaster-200 shadow-lg">
         <div className="flex justify-around items-center h-16">
           {roleLoading ? (
-            Array.from({ length: 4 }).map((_, i) => <div key={i} className="w-8 h-8 rounded-full bg-alabaster-100 animate-pulse" />)
+            Array.from({ length: 5 }).map((_, i) => <div key={i} className="w-8 h-8 rounded-full bg-alabaster-100 animate-pulse" />)
           ) : (
-            visibleItems.slice(0, 4).map((item) => {
+            // ✅ FIX: Changed from slice(0, 4) to slice(0, 5) so Receipts shows up on mobile!
+            visibleItems.slice(0, 5).map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
               return (
