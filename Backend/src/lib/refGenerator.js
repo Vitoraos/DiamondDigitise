@@ -31,8 +31,9 @@ function randomSuffix(bytes = 3) {
  * Generate a booking payment reference.
  * Example: HTL-20240421-A3F9
  */
-function generatePaymentRef() {
-  return `${config.booking.refPrefix}-${datePart()}-${randomSuffix()}`;
+// Update generateBookingRef:
+function generateBookingRef() {
+  return `${config.booking.refPrefix}-${datePart()}-${randomSuffix()}`; // ✅ FIX: Removed (4)
 }
 
 /**
