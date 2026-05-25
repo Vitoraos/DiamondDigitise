@@ -26,17 +26,16 @@ function startTimerWorker() {
 
     switch (type) {
 
-      case 'stay_end': {
-        // Stay has officially ended — no immediate action needed
-        // The stay_overrun timer (set +1hr) handles the alert.
-        // We update booking status for record keeping.
-        await supabaseAdmin
-          .from('bookings')
-          .update({ status: 'checked_out' })
-          .eq('id', bookingId);
-
-        logger.info('Stay ended — booking marked checked_out', { bookingId });
-        break;
+      // Find this block inside the switch (type) statement:
+case 'stay_end': {
+  await supabaseAdmin
+    .from('bookings')
+    .update({ status: 'checked_out' })
+    .eq('id', bookingId)
+    .eq('status', 'checked_in'); // ✅ FIX: Added guard
+  logger.info('Stay ended — booking marked checked_out', { bookingId });
+  break;
+}
       }
 
       case 'stay_overrun': {
