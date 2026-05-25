@@ -74,6 +74,16 @@ const receiptsService = {
     return receipt;
   },
 
+    async listReceipts() {
+    const { data, error } = await supabaseAdmin
+      .from('receipts')
+      .select('*, bookings(booking_ref, total_amount, num_nights, check_in_at, guests(name), rooms(room_number))')
+      .order('issued_at', { ascending: false })
+      .limit(100);
+    if (error) throw new AppError(error.message, 500);
+    return data;
+  },
+  
   async getReceiptByBookingId(bookingId) {
     const { data, error } = await supabaseAdmin
       .from('receipts')
