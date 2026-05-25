@@ -24,10 +24,11 @@ async function writeAuditLog({ actorId, actorRole, action, entity, entityId, pay
       payload,
     });
 
-  if (error) {
-    logger.error('Failed to write audit log', { error, action, entity, entityId });
-    throw new Error('Audit logging failed');
-  }
+  // Replace the error handling block:
+if (error) {
+  logger.error('Failed to write audit log', { error, action, entity, entityId });
+  // ✅ FIX: Removed throw new Error to prevent crashing parent transactions
+}
 
   logger.info('Audit log written', { action, entity, entityId, actorId });
 }
