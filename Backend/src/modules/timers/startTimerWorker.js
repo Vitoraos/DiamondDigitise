@@ -1,8 +1,4 @@
 // src/modules/timers/timers.worker.js
-// ─────────────────────────────────────────────────────────────
-// Bull worker that processes timer jobs when they fire.
-// This runs in the same Node process — no separate worker needed.
-// ─────────────────────────────────────────────────────────────
 'use strict';
 
 const { getQueue } = require('../../lib/queue');
@@ -26,20 +22,17 @@ function startTimerWorker() {
 
     switch (type) {
 
-      // Find this block inside the switch (type) statement:
-case 'stay_end': {
-  await supabaseAdmin
-    .from('bookings')
-    .update({ status: 'checked_out' })
-    .eq('id', bookingId)
-    .eq('status', 'checked_in'); // ✅ FIX: Added guard
-  logger.info('Stay ended — booking marked checked_out', { bookingId });
-  break;
-}
+      case 'stay_end': {
+        await supabaseAdmin
+          .from('bookings')
+          .update({ status: 'checked_out' })
+          .eq('id', bookingId)
+          .eq('status', 'checked_in'); // guard: only update if still checked in
+        logger.info('Stay ended — booking marked checked_out', { bookingId });
+        break;
       }
 
       case 'stay_overrun': {
-        // 1 hour past checkout — check if room is still in_use
         const { data: booking } = await supabaseAdmin
           .from('bookings')
           .select('booking_ref, rooms(room_number, status), guests(name, phone)')
@@ -48,15 +41,12 @@ case 'stay_end': {
 
         if (!booking) break;
 
-        const roomStatus = booking.rooms?.status;
-
-        if (roomStatus === 'occupied') {
-          // Room still occupied — alert owner
+        if (booking.rooms?.status === 'occupied') {
           await notificationService.notifyStayOverrun({
-            bookingRef:  booking.booking_ref,
-            guestName:   booking.guests?.name,
-            guestPhone:  booking.guests?.phone,
-            roomNumber:  booking.rooms?.room_number,
+            bookingRef: booking.booking_ref,
+            guestName:  booking.guests?.name,
+            guestPhone: booking.guests?.phone,
+            roomNumber: booking.rooms?.room_number,
           });
           logger.warn('Stay overrun alert sent', { bookingId });
         }
@@ -64,7 +54,6 @@ case 'stay_end': {
       }
 
       case 'cleaning_overrun': {
-        // 80 minutes into cleaning — check if still cleaning
         const { data: room } = await supabaseAdmin
           .from('rooms')
           .select('room_number, status, cleaning_started_at')
