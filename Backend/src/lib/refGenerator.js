@@ -3,7 +3,8 @@
 // Generates human-readable, unique references.
 //
 //   Booking ref:  HTL-20240421-A3F9
-//   Receipt ref:  RCP-20240421-001-X7K2
+//   Payment ref:  HTL-20240421-A3F9
+//   Receipt ref:  RCP-20240421-X7K2
 //
 // The random suffix makes collisions astronomically unlikely
 // even at high concurrency. The DB unique constraint is the
@@ -23,6 +24,7 @@ function datePart() {
   ].join('');
 }
 
+// Generates a 4-character hex suffix
 function randomSuffix(bytes = 3) {
   return randomBytes(bytes).toString('hex').toUpperCase().slice(0, 4);
 }
@@ -31,14 +33,13 @@ function randomSuffix(bytes = 3) {
  * Generate a booking payment reference.
  * Example: HTL-20240421-A3F9
  */
-// Update generateBookingRef:
-function generateBookingRef() {
-  return `${config.booking.refPrefix}-${datePart()}-${randomSuffix()}`; // ✅ FIX: Removed (4)
+function generatePaymentRef() {
+  return `${config.booking.refPrefix}-${datePart()}-${randomSuffix()}`;
 }
 
 /**
  * Generate a receipt number.
- * Example: RCP-20240421-A3F9
+ * Example: RCP-20240421-X7K2
  */
 function generateReceiptNumber() {
   return `${config.booking.receiptPrefix}-${datePart()}-${randomSuffix()}`;
@@ -47,9 +48,10 @@ function generateReceiptNumber() {
 /**
  * Generate a guest-facing booking ID (same as booking UUID but
  * the ref is what gets shown on receipt + used for key handover).
+ * Example: HTL-20240421-B8C2
  */
 function generateBookingRef() {
-  return `${config.booking.refPrefix}-${datePart()}-${randomSuffix(4)}`;
+  return `${config.booking.refPrefix}-${datePart()}-${randomSuffix()}`;
 }
 
 module.exports = { generatePaymentRef, generateReceiptNumber, generateBookingRef };
