@@ -32,6 +32,26 @@ function startTimerWorker() {
         break;
       }
 
+      case 'payment_expiry': {
+  const { data: booking } = await supabaseAdmin
+    .from('bookings')
+    .select('status')
+    .eq('id', bookingId)
+    .single();
+
+  // Only cancel if still pending — don't cancel if already confirmed
+  if (booking?.status === 'pending') {
+    await supabaseAdmin.from('bookings')
+      .update({ status: 'cancelled' })
+      .eq('id', bookingId);
+    await supabaseAdmin.from('rooms')
+      .update({ status: 'available' })
+      .eq('id', booking.room_id);
+    logger.info('Booking auto-cancelled: payment timeout', { bookingId });
+  }
+  break;
+}
+      
       case 'stay_overrun': {
         const { data: booking } = await supabaseAdmin
           .from('bookings')
