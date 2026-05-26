@@ -43,6 +43,65 @@ const timersService = {
   },
 
   /**
+   * Schedule a payment expiry timer (24 hours after booking creation).
+   * If payment is not confirmed within 24h, the booking will be auto-cancelled.
+   */
+  async schedulePaymentExpiry(bookingId, paymentRef) {
+    const delay = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    const fireAt = new Date(Date.now() + delay);
+    const jobId = `payment_expiry_${bookingId}`;
+
+    const queue = getQueue(TIMER_QUEUE);
+    const job = await queue.add(
+      { type: 'payment_expiry', bookingId, paymentRef },
+      { delay, jobId }
+    );
+
+    await supabaseAdmin
+      .from('timers')
+      .insert({
+        booking_id:  bookingId,
+        timer_type:  'payment_expiry',
+        fire_at:     fireAt.toISOString(),
+        bull_job_id: String(job.id),
+        payment_ref: paymentRef,
+      });
+
+    logger.info('Payment expiry timer scheduled', { bookingId, paymentRef, fireAt });
+    return job;
+  },
+
+  /**
+   * Cancel the payment expiry timer for a booking (e.g., when payment is confirmed).
+   */
+  async cancelPaymentExpiryTimer(bookingId) {
+    const { data: timer } = await supabaseAdmin
+      .from('timers')
+      .select('id, bull_job_id')
+      .eq('booking_id', bookingId)
+      .eq('timer_type', 'payment_expiry')
+      .eq('fired', false)
+      .single();
+
+    if (!timer) return;
+
+    try {
+      const queue = getQueue(TIMER_QUEUE);
+      const job = await queue.getJob(timer.bull_job_id);
+      if (job) await job.remove();
+    } catch (err) {
+      logger.warn('Could not remove payment expiry job', { jobId: timer.bull_job_id, error: err.message });
+    }
+
+    await supabaseAdmin
+      .from('timers')
+      .update({ fired: true, fired_at: new Date().toISOString() })
+      .eq('id', timer.id);
+
+    logger.info('Payment expiry timer cancelled', { bookingId });
+  },
+
+  /**
    * Schedule a cleaning overrun timer.
    * Cancels any existing cleaning timer for the same room first.
    */
@@ -156,14 +215,14 @@ const timersService = {
       const delay = new Date(timer.fire_at).getTime() - Date.now();
       if (delay <= 0) continue;
 
-      const job = await queue.add(
-        {
-          bookingId: timer.booking_id,
-          type:      timer.timer_type,
-          roomId:    timer.room_id ?? undefined,
-        },
-        { delay, jobId: `rehydrated-${timer.id}` }
-      );
+      const jobData = {
+        bookingId: timer.booking_id,
+        type:      timer.timer_type,
+        roomId:    timer.room_id ?? undefined,
+        paymentRef: timer.payment_ref ?? undefined,
+      };
+
+      const job = await queue.add(jobData, { delay, jobId: `rehydrated-${timer.id}` });
 
       await supabaseAdmin
         .from('timers')
