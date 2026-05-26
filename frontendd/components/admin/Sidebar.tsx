@@ -7,22 +7,22 @@ import { useRole } from "@/hooks/useRole";
 import { useAuth } from "@/hooks/useAuth";
 import {
   LayoutDashboard, DoorClosed, BookOpen, CreditCard,
-  Receipt, Users, Bell, Hotel, LogOut, MoreHorizontal, X,
+  Receipt, Users, Bell, Hotel, LogOut, MoreHorizontal, X, Activity,
 } from "lucide-react";
 
 interface MenuItem { label: string; icon: React.ElementType; href: string; roles: string[]; }
 
 const menuItems: MenuItem[] = [
-  { label: "Dashboard",     icon: LayoutDashboard, href: "/admin/dashboard",     roles: ["owner", "manager", "front_desk"] },
-  { label: "Rooms",         icon: DoorClosed,       href: "/admin/rooms",         roles: ["owner", "manager", "front_desk"] },
-  { label: "Bookings",      icon: BookOpen,          href: "/admin/bookings",      roles: ["owner", "manager", "front_desk"] },
-  { label: "Payments",      icon: CreditCard,        href: "/admin/payments",      roles: ["owner", "manager"] },
-  { label: "Receipts",      icon: Receipt,           href: "/admin/receipts",      roles: ["owner", "manager", "front_desk"] },
-  { label: "Staff",         icon: Users,             href: "/admin/staff",         roles: ["owner"] },
-  { label: "Notifications", icon: Bell,              href: "/admin/notifications", roles: ["owner"] },
+  { label: "Dashboard",   icon: LayoutDashboard, href: "/admin/dashboard",      roles: ["owner", "manager", "front_desk"] },
+  { label: "Rooms",       icon: DoorClosed,      href: "/admin/rooms",          roles: ["owner", "manager", "front_desk"] },
+  { label: "Room Status", icon: Activity,        href: "/admin/rooms/status",   roles: ["owner", "manager", "front_desk"] },
+  { label: "Bookings",    icon: BookOpen,        href: "/admin/bookings",       roles: ["owner", "manager", "front_desk"] },
+  { label: "Payments",    icon: CreditCard,      href: "/admin/payments",       roles: ["owner", "manager"] },
+  { label: "Receipts",    icon: Receipt,         href: "/admin/receipts",       roles: ["owner", "manager", "front_desk"] },
+  { label: "Staff",       icon: Users,           href: "/admin/staff",          roles: ["owner"] },
+  { label: "Notifications", icon: Bell,          href: "/admin/notifications",  roles: ["owner"] },
 ];
 
-// How many items to show in the bottom bar before overflow
 const BOTTOM_NAV_MAX = 4;
 
 export function Sidebar() {
@@ -39,7 +39,6 @@ export function Sidebar() {
   const overflowItems = visibleItems.slice(BOTTOM_NAV_MAX);
   const hasOverflow   = overflowItems.length > 0;
 
-  // If any overflow page is active, highlight the "More" button
   const overflowActive = overflowItems.some(
     (item) => pathname === item.href || pathname.startsWith(item.href + "/")
   );
@@ -121,7 +120,6 @@ export function Sidebar() {
                 );
               })}
 
-              {/* More button — only renders if overflow exists */}
               {hasOverflow && (
                 <button
                   onClick={() => setMoreOpen(true)}
@@ -139,23 +137,17 @@ export function Sidebar() {
         </div>
       </nav>
 
-      {/* ── More Drawer (slides up from bottom) ──────────────── */}
+      {/* ── More Drawer ──────────────────────────────────────── */}
       {moreOpen && (
         <>
-          {/* Backdrop */}
           <div
             className="fixed inset-0 z-[60] bg-black/30 backdrop-blur-sm lg:hidden"
             onClick={() => setMoreOpen(false)}
           />
-
-          {/* Sheet */}
           <div className="fixed bottom-0 left-0 right-0 z-[70] lg:hidden bg-white rounded-t-3xl shadow-2xl border-t border-alabaster-200 pb-safe animate-in slide-in-from-bottom duration-200">
-            {/* Handle */}
             <div className="flex justify-center pt-3 pb-1">
               <div className="w-10 h-1 rounded-full bg-alabaster-300" />
             </div>
-
-            {/* Header */}
             <div className="flex items-center justify-between px-6 pt-2 pb-4 border-b border-alabaster-100">
               <span className="text-sm font-semibold text-midnight-900 uppercase tracking-wider">More</span>
               <button
@@ -165,8 +157,6 @@ export function Sidebar() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-
-            {/* Overflow items */}
             <div className="px-4 py-3 space-y-1">
               {overflowItems.map((item) => {
                 const Icon = item.icon;
@@ -185,14 +175,10 @@ export function Sidebar() {
                   >
                     <Icon className="w-5 h-5" strokeWidth={isActive ? 2 : 1.5} />
                     <span className="text-sm font-medium">{item.label}</span>
-                    {isActive && (
-                      <span className="ml-auto w-1.5 h-1.5 rounded-full bg-gold-400" />
-                    )}
+                    {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-gold-400" />}
                   </Link>
                 );
               })}
-
-              {/* Sign out inside the drawer too */}
               <button
                 onClick={() => { setMoreOpen(false); signOut(); }}
                 className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl text-red-500 hover:bg-red-50 transition-all mt-2"
@@ -201,8 +187,6 @@ export function Sidebar() {
                 <span className="text-sm font-medium">Sign Out</span>
               </button>
             </div>
-
-            {/* Bottom spacing for home indicator */}
             <div className="h-6" />
           </div>
         </>
