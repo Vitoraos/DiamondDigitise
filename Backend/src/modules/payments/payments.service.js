@@ -59,11 +59,12 @@ const paymentsService = {
 
     // Bundle Monnify account details to send to the frontend
     const paymentDetails = {
-      accountNumber: config.monnify.accountNumber,
-      bankName:      config.monnify.bankName,
-      accountName:   config.monnify.accountName,
-      amount:        booking.total_amount,
-    };
+  accountNumber: config.monnify.accountNumber,
+  bankName:      config.monnify.bankName,
+  accountName:   config.monnify.accountName,
+  amount:        booking.total_amount,
+  paymentRef:    paymentRef,   // ← add this
+};
 
     if (booking.status === 'confirmed') return { status: 'confirmed', bookingId: booking.id };
     if (booking.status === 'incomplete_payment') return { status: 'incomplete_payment', bookingId: booking.id };
