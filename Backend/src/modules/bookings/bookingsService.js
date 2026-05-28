@@ -99,6 +99,9 @@ const bookingsService = {
 
     if (payErr) throw new AppError('Failed to initialise payment record', 500);
 
+    // Initialise the payment expiry timer to auto-delete the booking and free up the room if unpaid
+    await timersService.schedulePaymentExpiry(booking.id, paymentRef);
+
     logger.info('Booking created', {
       bookingId:  booking.id,
       bookingRef,
@@ -157,6 +160,9 @@ const bookingsService = {
       .from('rooms')
       .update({ status: 'occupied' })
       .eq('id', booking.room_id);
+
+    // Clean up the expiry timer - they've paid successfully
+    await timersService.cancelPaymentExpiryTimer(bookingId);
 
     logger.info('Booking confirmed', { bookingId, checkInAt, checkOutAt });
 
@@ -278,15 +284,34 @@ const bookingsService = {
   },
 
   async cancelBooking(id, actor) {
+    // We first get the room_id related to this booking to free the room up
+    const { data: booking, error: fetchErr } = await supabaseAdmin
+      .from('bookings')
+      .select('id, room_id, status')
+      .eq('id', id)
+      .single();
+
+    if (fetchErr || !booking) throw new AppError('Booking not found', 404);
+
+    // Cancel the booking (now explicitly supporting the failed incomplete_payment too)
     const { data, error } = await supabaseAdmin
       .from('bookings')
       .update({ status: 'cancelled' })
       .eq('id', id)
-      .in('status', ['pending_payment', 'confirmed'])
+      .in('status', ['pending_payment', 'incomplete_payment', 'confirmed'])
       .select()
       .single();
 
-    if (error || !data) throw new AppError('Cannot cancel this booking', 409);
+    if (error || !data) throw new AppError('Cannot cancel this booking in its current state', 409);
+
+    // ✅ FIX: Assure the room goes back to available, allowing fresh bookings
+    await supabaseAdmin
+      .from('rooms')
+      .update({ status: 'available' })
+      .eq('id', booking.room_id);
+
+    // ✅ FIX: Kill any dangling timers on cancellation (stops false checkout triggers)
+    await timersService.cancelBookingTimers(id);
 
     await writeAuditLog({
       actorId:   actor.id,
