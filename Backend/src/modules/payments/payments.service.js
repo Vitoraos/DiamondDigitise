@@ -59,12 +59,12 @@ const paymentsService = {
 
     // Bundle Monnify account details to send to the frontend
     const paymentDetails = {
-  accountNumber: config.monnify.accountNumber,
-  bankName:      config.monnify.bankName,
-  accountName:   config.monnify.accountName,
-  amount:        booking.total_amount,
-  paymentRef:    paymentRef,   // ← add this
-};
+      accountNumber: config.monnify.accountNumber,
+      bankName:      config.monnify.bankName,
+      accountName:   config.monnify.accountName,
+      amount:        booking.total_amount,
+      paymentRef:    paymentRef,
+    };
 
     if (booking.status === 'confirmed') return { status: 'confirmed', bookingId: booking.id };
     if (booking.status === 'incomplete_payment') return { status: 'incomplete_payment', bookingId: booking.id };
@@ -103,9 +103,12 @@ const paymentsService = {
   },
 
   async _handleFullPayment(booking, payment, amountReceived, monnifyRef) {
-    const { checkInAt, checkOutAt, bookingRef } = await bookingsService.confirmBooking(
+    const { bookingRef } = await bookingsService.confirmBooking(
       booking.id, amountReceived, monnifyRef
     );
+
+    // Cancel expiry timer if they paid fully
+    await timersService.cancelPaymentExpiryTimer(booking.id);
 
     await supabaseAdmin.from('payments').update({
       status: 'confirmed', amount_received: amountReceived,
@@ -113,14 +116,15 @@ const paymentsService = {
     }).eq('id', payment.id);
 
     await receiptsService.generateReceipt(booking.id);
-    await timersService.scheduleBookingTimers(booking.id, checkOutAt);
+    
+    // NOTE: Timers no longer started here. They will start when verifyBooking (check in) is called at the desk.
     
     await notificationService.notifyNewBooking({
-      bookingRef, guestName: booking.guests?.name,
+      bookingRef: booking.booking_ref, guestName: booking.guests?.name,
       roomNumber: booking.rooms?.room_number,
       totalAmount: booking.total_amount, numNights: booking.num_nights,
     });
-    logger.info('Payment confirmed and booking activated', { bookingId: booking.id, amountReceived });
+    logger.info('Payment confirmed via monnify', { bookingId: booking.id, amountReceived });
   },
 
   async _handleIncompletePayment(booking, payment, amountReceived, monnifyRef, tx) {
@@ -154,7 +158,6 @@ const paymentsService = {
       }).eq('id', payment.id);
     }
 
-    // ✅ FIX: Changed booking.payment_ref to booking.booking_ref
     await notificationService.notifyIncompletePayment({
       bookingRef: booking.booking_ref, 
       amountExpected: booking.total_amount,
