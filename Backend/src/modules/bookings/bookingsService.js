@@ -99,9 +99,6 @@ const bookingsService = {
 
     if (payErr) throw new AppError('Failed to initialise payment record', 500);
 
-    // Initialise the payment expiry timer to auto-delete the booking and free up the room if unpaid
-    await timersService.schedulePaymentExpiry(booking.id, paymentRef);
-
     logger.info('Booking created', {
       bookingId:  booking.id,
       bookingRef,
@@ -143,30 +140,23 @@ const bookingsService = {
       throw new AppError('Insufficient payment', 402, 'INSUFFICIENT_PAYMENT');
     }
 
-    const checkInAt  = new Date();
-    const checkOutAt = new Date(checkInAt);
-    checkOutAt.setHours(checkOutAt.getHours() + booking.num_nights * 24);
-
+    // Setting the status to confirmed. Dates will be finalized when verified/checked-in
     await supabaseAdmin
       .from('bookings')
       .update({
-        status:       'confirmed',
-        check_in_at:  checkInAt.toISOString(),
-        check_out_at: checkOutAt.toISOString(),
+        status: 'confirmed',
       })
       .eq('id', bookingId);
 
+    // Keep the room marked as occupied so no one else can book it 
     await supabaseAdmin
       .from('rooms')
       .update({ status: 'occupied' })
       .eq('id', booking.room_id);
 
-    // Clean up the expiry timer - they've paid successfully
-    await timersService.cancelPaymentExpiryTimer(bookingId);
+    logger.info('Booking confirmed', { bookingId });
 
-    logger.info('Booking confirmed', { bookingId, checkInAt, checkOutAt });
-
-    return { bookingId, checkInAt, checkOutAt, bookingRef: booking.booking_ref };
+    return { bookingId, bookingRef: booking.booking_ref };
   },
 
   /**
@@ -176,14 +166,15 @@ const bookingsService = {
     const { data, error } = await supabaseAdmin
       .from('bookings')
       .select(`
-        id, booking_ref, status, num_nights, total_amount,
+        id, booking_ref, status, num_nights, total_amount, payment_ref,
         price_per_night, check_in_at, check_out_at, created_at,
         guests ( name, phone ),
         rooms ( room_number, floor ),
         categories ( name ),
-        receipts ( receipt_number, pdf_url, issued_at )
+        receipts ( receipt_number, pdf_url, issued_at ),
+        payments ( status, amount_received )
       `)
-      .eq('booking_ref', ref)
+      .or(`booking_ref.eq.${ref},payment_ref.eq.${ref},receipts.receipt_number.eq.${ref}`)
       .single();
 
     if (error || !data) throw new AppError('Booking not found', 404);
@@ -230,44 +221,60 @@ const bookingsService = {
 
   /**
    * Front-desk verifies the booking ref guest presents at reception.
-   * Only allowed if status is 'confirmed' (prevents double verification).
    */
   async verifyBooking(id, actor) {
     const booking = await this.getBookingById(id);
 
     if (booking.status !== 'confirmed') {
-      throw new AppError('Booking is not in a verifiable state', 409, 'NOT_VERIFIED');
+      throw new AppError('Booking is not in a verifiable state (must be confirmed)', 409, 'NOT_VERIFIED');
     }
 
-    const now = new Date().toISOString();
+    const now = new Date();
+    
+    // The user's checkout timer should start from when the payment is verified (checked-in)
+    const checkOutAt = new Date(now);
+    checkOutAt.setHours(checkOutAt.getHours() + booking.num_nights * 24);
 
     const { error: updateErr } = await supabaseAdmin
       .from('bookings')
       .update({
-        status:      'checked_in',
-        verified_at: now,
-        verified_by: actor.id,
+        status:       'checked_in',
+        check_in_at:  now.toISOString(),
+        check_out_at: checkOutAt.toISOString(),
+        verified_at:  now.toISOString(),
+        verified_by:  actor?.id || null,
       })
       .eq('id', id);
 
     if (updateErr) throw new AppError('Failed to verify booking', 500);
 
-    await writeAuditLog({
-      actorId:   actor.id,
-      actorRole: actor.role,
-      action:    'verify_booking',
-      entity:    'bookings',
-      entityId:  id,
-      payload:   {
-        bookingRef:     booking.booking_ref,
-        previousStatus: booking.status,
-      },
-    });
+    // Make sure the room is occupied
+    await supabaseAdmin
+      .from('rooms')
+      .update({ status: 'occupied' })
+      .eq('id', booking.room_id);
+
+    // Ensure we start the billing timer now that they are checked in
+    await timersService.scheduleBookingTimers(id, checkOutAt.toISOString());
+
+    if (actor?.id) {
+        await writeAuditLog({
+          actorId:   actor.id,
+          actorRole: actor.role,
+          action:    'verify_booking',
+          entity:    'bookings',
+          entityId:  id,
+          payload:   {
+            bookingRef:     booking.booking_ref,
+            previousStatus: booking.status,
+          },
+        });
+    }
 
     logger.info('Booking verified & checked in', {
       bookingId:  id,
-      actor:      actor.fullName,
-      verifiedAt: now,
+      actor:      actor?.fullName || 'system',
+      verifiedAt: now.toISOString(),
     });
 
     return {
@@ -275,43 +282,43 @@ const bookingsService = {
       bookingRef:  booking.booking_ref,
       guestName:   booking.guests.name,
       roomNumber:  booking.rooms.room_number,
-      checkInAt:   booking.check_in_at,
-      checkOutAt:  booking.check_out_at,
+      checkInAt:   now.toISOString(),
+      checkOutAt:  checkOutAt.toISOString(),
       numNights:   booking.num_nights,
       totalAmount: booking.total_amount,
-      verifiedAt:  now,
+      verifiedAt:  now.toISOString(),
     };
   },
 
   async cancelBooking(id, actor) {
-    // We first get the room_id related to this booking to free the room up
-    const { data: booking, error: fetchErr } = await supabaseAdmin
+    const { data: booking, error: fetchError } = await supabaseAdmin
       .from('bookings')
       .select('id, room_id, status')
       .eq('id', id)
       .single();
 
-    if (fetchErr || !booking) throw new AppError('Booking not found', 404);
+    if (fetchError || !booking) throw new AppError('Booking not found', 404);
 
-    // Cancel the booking (now explicitly supporting the failed incomplete_payment too)
     const { data, error } = await supabaseAdmin
       .from('bookings')
       .update({ status: 'cancelled' })
       .eq('id', id)
-      .in('status', ['pending_payment', 'incomplete_payment', 'confirmed'])
+      .in('status', ['pending_payment', 'confirmed'])
       .select()
       .single();
 
-    if (error || !data) throw new AppError('Cannot cancel this booking in its current state', 409);
+    if (error || !data) throw new AppError('Cannot cancel this booking', 409);
 
-    // ✅ FIX: Assure the room goes back to available, allowing fresh bookings
+    // Cancel all associated timers
+    await timersService.cancelBookingTimers(id);
+    await timersService.cancelPaymentExpiryTimer(id);
+
+    // Always free the room if the booking is cancelled
     await supabaseAdmin
       .from('rooms')
       .update({ status: 'available' })
-      .eq('id', booking.room_id);
-
-    // ✅ FIX: Kill any dangling timers on cancellation (stops false checkout triggers)
-    await timersService.cancelBookingTimers(id);
+      .eq('id', booking.room_id)
+      .eq('status', 'occupied');
 
     await writeAuditLog({
       actorId:   actor.id,
