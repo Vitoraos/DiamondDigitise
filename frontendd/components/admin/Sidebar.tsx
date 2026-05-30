@@ -7,7 +7,7 @@ import { useRole } from "@/hooks/useRole";
 import { useAuth } from "@/hooks/useAuth";
 import {
   LayoutDashboard, DoorClosed, BookOpen, CreditCard,
-  Receipt, Users, Bell, Hotel, LogOut, MoreHorizontal, X, Activity,
+  Receipt, Users, Bell, Hotel, LogOut, MoreHorizontal, X, Activity, Search
 } from "lucide-react";
 
 interface MenuItem { label: string; icon: React.ElementType; href: string; roles: string[]; }
@@ -17,6 +17,7 @@ const menuItems: MenuItem[] = [
   { label: "Rooms",       icon: DoorClosed,      href: "/admin/rooms",          roles: ["owner", "manager", "front_desk"] },
   { label: "Room Status", icon: Activity,        href: "/admin/rooms/status",   roles: ["owner", "manager", "front_desk"] },
   { label: "Bookings",    icon: BookOpen,        href: "/admin/bookings",       roles: ["owner", "manager", "front_desk"] },
+  { label: "Verify",      icon: Search,          href: "/admin/verify",         roles: ["owner", "manager", "front_desk"] },
   { label: "Payments",    icon: CreditCard,      href: "/admin/payments",       roles: ["owner", "manager"] },
   { label: "Receipts",    icon: Receipt,         href: "/admin/receipts",       roles: ["owner", "manager", "front_desk"] },
   { label: "Staff",       icon: Users,           href: "/admin/staff",          roles: ["owner"] },
