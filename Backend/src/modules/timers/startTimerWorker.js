@@ -33,28 +33,27 @@ function startTimerWorker() {
       }
 
       case 'payment_expiry': {
-        const { data: booking } = await supabaseAdmin
-          .from('bookings')
-          .select('status, room_id')
-          .eq('id', bookingId)
-          .single();
+  const { data: booking } = await supabaseAdmin
+    .from('bookings')
+    .select('status, room_id')
+    .eq('id', bookingId)
+    .single();
 
-        // ✅ FIX: Correct string comparison 'pending_payment' instead of 'pending'
-        // Also handling 'incomplete_payment' edge cases to prevent getting stranded.
-        if (booking?.status === 'pending_payment' || booking?.status === 'incomplete_payment') {
-          await supabaseAdmin.from('bookings')
-            .update({ status: 'cancelled' })
-            .eq('id', bookingId);
-            
-          // ✅ FIX: Free room status explicitly so it can be rebooked!
-          await supabaseAdmin.from('rooms')
-            .update({ status: 'available' })
-            .eq('id', booking.room_id);
-            
-          logger.info('Booking auto-cancelled: payment timeout', { bookingId });
-        }
-        break;
-      }
+  // Only cancel if still pending payment — don't cancel if already confirmed
+  if (booking?.status === 'pending_payment') {
+    await supabaseAdmin.from('bookings')
+      .update({ status: 'cancelled' })
+      .eq('id', bookingId);
+      
+    // IMPORTANT: free up the room since payment expired.
+    await supabaseAdmin.from('rooms')
+      .update({ status: 'available' })
+      .eq('id', booking.room_id);
+      
+    logger.info('Booking auto-cancelled: payment timeout', { bookingId });
+  }
+  break;
+}
       
       case 'stay_overrun': {
         const { data: booking } = await supabaseAdmin
