@@ -9,7 +9,7 @@ const { AppError } = require('../../middleware/errorHandler');
 const logger = require('../../lib/logger');
 const timersService = require('../timers/timersService');
 
-const VALID_STATUSES = ['available', 'occupied', 'cleaning', 'maintenance'];
+const VALID_STATUSES = ['available', 'reserved', 'occupied', 'cleaning', 'maintenance'];
 
 const roomsService = {
   async getAllRooms() {
