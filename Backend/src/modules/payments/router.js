@@ -9,8 +9,14 @@ const controller = require('./controller');
 const router = Router();
 
 // ── Public ───────────────────────────────────────────────────
-// GET  /api/payments/poll/:paymentRef  — frontend polls this every 5s
+// GET  /api/payments/poll/:paymentRef  — manual fallback check
 router.get('/poll/:paymentRef', asyncHandler(controller.poll));
+
+// GET  /api/payments/stream/:paymentRef — SSE, primary confirmation push
+router.get('/stream/:paymentRef', asyncHandler(controller.stream));
+
+// POST /api/payments/webhook — Monnify server-to-server notification
+router.post('/webhook', asyncHandler(controller.webhook));
 
 // ── Admin ────────────────────────────────────────────────────
 // GET  /api/payments                   — list payments (owner/manager)
