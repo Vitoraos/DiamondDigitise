@@ -43,15 +43,14 @@ const timersService = {
   },
 
   /**
-   * Schedule a payment expiry timer (default 24h after booking creation,
-   * configurable via PAYMENT_EXPIRY_HOURS).
-   * If payment is not confirmed within this window, the booking will be
-   * auto-cancelled — but only after a final re-check against Monnify
-   * (see startTimerWorker.js) so we never cancel a booking that was
-   * actually paid for.
+   * Schedule a payment expiry timer (default 12 minutes, configurable via
+   * PAYMENT_EXPIRY_MINUTES). If payment is not confirmed within this
+   * window, the booking is auto-cancelled — but only after a final
+   * re-check against Monnify (see startTimerWorker.js), since the webhook
+   * is the primary confirmation path but can still fail to deliver.
    */
   async schedulePaymentExpiry(bookingId, paymentRef) {
-    const delay = config.timers.paymentExpiryHours * 60 * 60 * 1000;
+    const delay = config.timers.paymentExpiryMinutes * 60 * 1000;
     const fireAt = new Date(Date.now() + delay);
     const jobId = `payment_expiry_${bookingId}`;
 
@@ -74,7 +73,6 @@ const timersService = {
     logger.info('Payment expiry timer scheduled', { bookingId, paymentRef, fireAt });
     return job;
   },
-
   /**
    * Cancel the payment expiry timer for a booking (e.g., when payment is confirmed).
    */
