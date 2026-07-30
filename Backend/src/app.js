@@ -40,7 +40,10 @@ function createApp() {
     credentials: true,
   }));
 
-  app.use(express.json({ limit: '10kb' }));
+ app.use(express.json({
+    limit: '10kb',
+    verify: (req, res, buf) => { req.rawBody = buf; },
+  }));
   app.use(express.urlencoded({ extended: false }));
   app.use(compression());
 
