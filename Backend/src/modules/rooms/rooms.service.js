@@ -136,6 +136,14 @@ const roomsService = {
       );
     }
 
+    if (newStatus === 'reserved') {
+      throw new AppError(
+        'Room reservation is set automatically during the booking/payment flow. It cannot be set manually.',
+        400,
+        'RESERVED_AUTO_ONLY'
+      );
+    }
+
     if (!VALID_STATUSES.includes(newStatus)) {
       throw new AppError(
         `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
