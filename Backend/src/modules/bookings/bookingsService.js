@@ -2,10 +2,12 @@
 // ─────────────────────────────────────────────────────────────
 // Booking lifecycle:
 //   Guest submits checkout form
-//   → createBooking() creates guest + booking + payment records
+//   → createBooking() creates guest + booking + payment records,
+//     marks the room 'reserved', and starts a payment-expiry timer
 //   → returns payment_ref + account details for Monnify page
-//   → payment service polls Monnify and calls confirmBooking()
-//   → confirmBooking() sets room to in_use, starts timers
+//   → payment service polls Monnify (or the reconciliation sweep /
+//     expiry timer catches it) and calls confirmBooking()
+//   → confirmBooking() moves room reserved → occupied, starts stay timers
 // ─────────────────────────────────────────────────────────────
 'use strict';
 
@@ -99,6 +101,31 @@ const bookingsService = {
 
     if (payErr) throw new AppError('Failed to initialise payment record', 500);
 
+    // Reserve the room so the room list stops advertising it as available
+    // while payment is in flight. This is a display-consistency update only
+    // — the actual double-booking guard is the unique constraint on the
+    // bookings table that already rejected the insert above if the room
+    // was taken. If this update loses a race (e.g. an admin flipped the
+    // room to maintenance a moment ago), log it and continue — the
+    // booking itself is already correctly created.
+    const { error: roomReserveErr } = await supabaseAdmin
+      .from('rooms')
+      .update({ status: 'reserved' })
+      .eq('id', roomId)
+      .eq('status', 'available');
+
+    if (roomReserveErr) {
+      logger.warn('Could not mark room as reserved after booking creation', {
+        bookingId: booking.id, roomId, error: roomReserveErr.message,
+      });
+    }
+
+    // Auto-cancel this booking (and free the room) if payment never
+    // completes. Without this, a guest who never pays holds the room
+    // indefinitely — see startTimerWorker.js for the safeguard that
+    // re-checks Monnify before actually cancelling.
+    await timersService.schedulePaymentExpiry(booking.id, paymentRef);
+
     logger.info('Booking created', {
       bookingId:  booking.id,
       bookingRef,
@@ -148,11 +175,28 @@ const bookingsService = {
       })
       .eq('id', bookingId);
 
-    // Keep the room marked as occupied so no one else can book it 
-    await supabaseAdmin
+    // Move the room reserved → occupied now that payment is in. Guarded
+    // on 'reserved' so we notice — rather than silently overwrite — if
+    // the room was put into maintenance while payment was pending. That's
+    // a real physical conflict a human needs to resolve, not something
+    // the system should paper over.
+    const { data: roomUpdated, error: roomUpdateErr } = await supabaseAdmin
       .from('rooms')
       .update({ status: 'occupied' })
-      .eq('id', booking.room_id);
+      .eq('id', booking.room_id)
+      .eq('status', 'reserved')
+      .select()
+      .single();
+
+    if (roomUpdateErr || !roomUpdated) {
+      logger.warn('Room was not in reserved state when payment was confirmed — forcing to occupied. Check for a manual status change (e.g. maintenance) on this room.', {
+        bookingId, roomId: booking.room_id,
+      });
+      await supabaseAdmin
+        .from('rooms')
+        .update({ status: 'occupied' })
+        .eq('id', booking.room_id);
+    }
 
     logger.info('Booking confirmed', { bookingId });
 
@@ -230,7 +274,7 @@ const bookingsService = {
     }
 
     const now = new Date();
-    
+
     // The user's checkout timer should start from when the payment is verified (checked-in)
     const checkOutAt = new Date(now);
     checkOutAt.setHours(checkOutAt.getHours() + booking.num_nights * 24);
@@ -313,12 +357,14 @@ const bookingsService = {
     await timersService.cancelBookingTimers(id);
     await timersService.cancelPaymentExpiryTimer(id);
 
-    // Always free the room if the booking is cancelled
+    // Always free the room if the booking is cancelled. A cancelled
+    // booking could have been 'reserved' (payment never came in) or
+    // 'occupied' (paid, then cancelled by staff) — cover both.
     await supabaseAdmin
       .from('rooms')
       .update({ status: 'available' })
       .eq('id', booking.room_id)
-      .eq('status', 'occupied');
+      .in('status', ['reserved', 'occupied']);
 
     await writeAuditLog({
       actorId:   actor.id,
