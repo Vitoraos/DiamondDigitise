@@ -40,16 +40,11 @@ function startTimerWorker() {
       case 'payment_expiry': {
         const { data: booking } = await supabaseAdmin
           .from('bookings')
-          .select('status, room_id')
+          .select('status, room_id, payment_ref')
           .eq('id', bookingId)
           .single();
 
-        // Only act if still pending payment — don't touch if already confirmed
         if (booking?.status === 'pending_payment') {
-          // Last chance: the guest might have actually paid and we just
-          // never confirmed it (frontend tab closed before polling caught
-          // it). Re-check Monnify before cancelling — never cancel a
-          // booking that was actually paid for.
           const result = await paymentsService.reconcileBookingById(bookingId);
 
           if (result.status === 'confirmed' || result.status === 'incomplete_payment') {
@@ -59,6 +54,21 @@ function startTimerWorker() {
             break;
           }
 
+          await supabaseAdmin.from('bookings')
+            .update({ status: 'cancelled' })
+            .eq('id', bookingId);
+
+          await supabaseAdmin.from('rooms')
+            .update({ status: 'available' })
+            .eq('id', booking.room_id)
+            .in('status', ['reserved', 'occupied']);
+
+          paymentStream.publish(booking.payment_ref, { status: 'cancelled', bookingId });
+
+          logger.info('Booking auto-cancelled: payment timeout', { bookingId });
+        }
+        break;
+      }
           await supabaseAdmin.from('bookings')
             .update({ status: 'cancelled' })
             .eq('id', bookingId);
