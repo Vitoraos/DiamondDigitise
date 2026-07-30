@@ -82,6 +82,8 @@ const config = {
   timers: {
     stayOverrunMinutes: 60,      // alert owner 1 hr after checkout
     cleaningOverrunMinutes: 80,  // alert owner after 80 min cleaning
+    paymentExpiryHours: parseInt(process.env.PAYMENT_EXPIRY_HOURS || '24', 10),
+    paymentReconcileIntervalMinutes: parseInt(process.env.PAYMENT_RECONCILE_INTERVAL_MINUTES || '5', 10),
   },
 };
 
