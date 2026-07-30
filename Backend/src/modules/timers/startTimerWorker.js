@@ -3,9 +3,11 @@
 
 const { getQueue } = require('../../lib/queue');
 const { supabaseAdmin } = require('../../lib/supabase');
+const config = require('../../config');
 const logger = require('../../lib/logger');
 const notificationService = require('../notifications/notificationService');
 const timersService = require('./timersService');
+const paymentsService = require('../payments/payments.service');
 
 function startTimerWorker() {
   const queue = getQueue('timers');
@@ -14,11 +16,14 @@ function startTimerWorker() {
     const { bookingId, type, roomId } = job.data;
     logger.info('Timer fired', { bookingId, type });
 
-    // Mark as fired in DB
-    await supabaseAdmin
-      .from('timers')
-      .update({ fired: true, fired_at: new Date().toISOString() })
-      .eq('bull_job_id', String(job.id));
+    // Only per-booking/room timers have a row in the `timers` table.
+    // The reconciliation sweep is a bare repeatable job with no bookingId.
+    if (bookingId) {
+      await supabaseAdmin
+        .from('timers')
+        .update({ fired: true, fired_at: new Date().toISOString() })
+        .eq('bull_job_id', String(job.id));
+    }
 
     switch (type) {
 
@@ -33,28 +38,48 @@ function startTimerWorker() {
       }
 
       case 'payment_expiry': {
-  const { data: booking } = await supabaseAdmin
-    .from('bookings')
-    .select('status, room_id')
-    .eq('id', bookingId)
-    .single();
+        const { data: booking } = await supabaseAdmin
+          .from('bookings')
+          .select('status, room_id')
+          .eq('id', bookingId)
+          .single();
 
-  // Only cancel if still pending payment — don't cancel if already confirmed
-  if (booking?.status === 'pending_payment') {
-    await supabaseAdmin.from('bookings')
-      .update({ status: 'cancelled' })
-      .eq('id', bookingId);
-      
-    // IMPORTANT: free up the room since payment expired.
-    await supabaseAdmin.from('rooms')
-      .update({ status: 'available' })
-      .eq('id', booking.room_id);
-      
-    logger.info('Booking auto-cancelled: payment timeout', { bookingId });
-  }
-  break;
-}
-      
+        // Only act if still pending payment — don't touch if already confirmed
+        if (booking?.status === 'pending_payment') {
+          // Last chance: the guest might have actually paid and we just
+          // never confirmed it (frontend tab closed before polling caught
+          // it). Re-check Monnify before cancelling — never cancel a
+          // booking that was actually paid for.
+          const result = await paymentsService.reconcileBookingById(bookingId);
+
+          if (result.status === 'confirmed' || result.status === 'incomplete_payment') {
+            logger.info('Payment expiry timer fired but booking was actually paid — reconciled instead of cancelling', {
+              bookingId, result: result.status,
+            });
+            break;
+          }
+
+          await supabaseAdmin.from('bookings')
+            .update({ status: 'cancelled' })
+            .eq('id', bookingId);
+
+          // Free up the room since payment expired. Guard against
+          // clobbering a room an admin has since put into maintenance.
+          await supabaseAdmin.from('rooms')
+            .update({ status: 'available' })
+            .eq('id', booking.room_id)
+            .in('status', ['reserved', 'occupied']);
+
+          logger.info('Booking auto-cancelled: payment timeout', { bookingId });
+        }
+        break;
+      }
+
+      case 'payment_reconcile_sweep': {
+        await paymentsService.reconcilePendingPayments();
+        break;
+      }
+
       case 'stay_overrun': {
         const { data: booking } = await supabaseAdmin
           .from('bookings')
@@ -98,6 +123,18 @@ function startTimerWorker() {
       default:
         logger.warn('Unknown timer type', { type, bookingId });
     }
+  });
+
+  // Safety-net sweep: catches any pending_payment booking whose frontend
+  // polling stopped (tab closed, app backgrounded) before Monnify
+  // confirmation was ever recorded. Runs independently of the per-booking
+  // expiry timer above. Bull dedupes identical repeatable job definitions
+  // across restarts, so this is safe to call on every boot.
+  queue.add(
+    { type: 'payment_reconcile_sweep' },
+    { repeat: { every: config.timers.paymentReconcileIntervalMinutes * 60_000 } }
+  ).catch((err) => {
+    logger.error('Failed to schedule payment reconciliation sweep', { error: err.message });
   });
 
   // Rehydrate any jobs lost during a previous restart
