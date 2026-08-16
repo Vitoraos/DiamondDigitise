@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* ── Diamond Residence design tokens ── */
+
+  /* Deep emerald ink — not the generic cream or near-black default */
+  --color-ink: #10302a;
+  --color-ink-deep: #0a201b;
+  --color-ink-light: #17453c;
+
+  /* Warm brass — primary accent, the pill CTA, the ledger rule */
+  --color-brass: #c9a24b;
+  --color-brass-bright: #ddb968;
+
+  /* Ivory text on dark ink */
+  --color-ivory: #f5f1e8;
+  --color-ivory-dim: #cfc9ba;
+
+  /* Category colors — shared with the PDF receipt badges */
+  --color-sale: #6ee7b4;
+  --color-purchase: #fbbf77;
+  --color-expense: #f5a3a3;
+
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-ivory);
+}
+
+/* Respect reduced-motion preference throughout */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Visible keyboard focus everywhere — accessibility floor, not optional */
+:focus-visible {
+  outline: 2px solid var(--color-brass-bright);
+  outline-offset: 2px;
+}
