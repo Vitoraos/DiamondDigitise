@@ -102,12 +102,12 @@ export function ReceiptDetailModal({
         <div className="mt-6 flex gap-3">
           
             href={receiptPdfUrl(tx.id)}
-            target="_blank"
-            rel="noreferrer"
-            className="flex-1 rounded-full bg-brass px-4 py-3 text-center font-semibold text-ink-deep"
-          >
-            Download
-          </a>
+  target="_blank"
+  rel="noreferrer"
+  className="flex-1 rounded-full bg-brass px-4 py-3 text-center font-semibold text-ink-deep"
+>
+  Download
+</a>
           <button
             type="button"
             onClick={() => shareReceipt(receiptPdfUrl(tx.id))}
