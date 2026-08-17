@@ -305,7 +305,8 @@ export default function RecordPage() {
 
                 <div className="mt-10 flex w-full max-w-xs flex-col gap-3">
                   
-                    href={receiptPdfUrl(savedTx.id)}
+                    <a
+  href={receiptPdfUrl(tx.id)}
                     target="_blank"
                     rel="noreferrer"
                     className="rounded-full bg-brass px-6 py-4 text-center font-semibold text-ink-deep"
