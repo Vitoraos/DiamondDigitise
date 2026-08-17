@@ -87,7 +87,6 @@ export default function HistoryPage() {
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(tx);
     }
-    // Map preserves insertion order; transactions arrive newest-first from the API
     return Array.from(groups.entries());
   }, [transactions]);
 
@@ -98,87 +97,98 @@ export default function HistoryPage() {
           <div className="flex-1 overflow-y-auto px-6 py-6">
             <h1 className="font-display text-4xl text-ivory">History</h1>
 
-            {/* Type filter */}
-            <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
-              {TYPE_FILTERS.map((f) => (
-                <button
-                  key={f.value}
-                  type="button"
-                  onClick={() => setTypeFilter(f.value)}
-                  className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                    typeFilter === f.value
-                      ? "bg-brass text-ink-deep"
-                      : "bg-ink-light text-ivory-dim"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Date filter */}
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-              {PRESETS.map((p) => (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() => {
-                    setPreset(p.value);
-                    setCustomMode(false);
-                  }}
-                  className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                    !customMode && preset === p.value
-                      ? "bg-ink-light text-brass-bright border border-brass"
-                      : "bg-ink-light text-ivory-dim"
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => setCustomMode(true)}
-                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                  customMode
-                    ? "bg-ink-light text-brass-bright border border-brass"
-                    : "bg-ink-light text-ivory-dim"
-                }`}
-              >
-                Custom
-              </button>
-            </div>
-
-            {customMode && (
-              <div className="mt-3 flex gap-3">
-                <div className="flex-1">
-                  <label htmlFor="fromDate" className="mb-1 block text-xs text-ivory-dim">
-                    From
-                  </label>
-                  <input
-                    id="fromDate"
-                    type="date"
-                    value={customFrom}
-                    onChange={(e) => setCustomFrom(e.target.value)}
-                    className="w-full rounded-lg border border-ink-light bg-ink-deep px-3 py-2 text-sm text-ivory"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label htmlFor="toDate" className="mb-1 block text-xs text-ivory-dim">
-                    To
-                  </label>
-                  <input
-                    id="toDate"
-                    type="date"
-                    value={customTo}
-                    onChange={(e) => setCustomTo(e.target.value)}
-                    className="w-full rounded-lg border border-ink-light bg-ink-deep px-3 py-2 text-sm text-ivory"
-                  />
+            {/* Filters, grouped in their own card for visual separation from the list */}
+            <div className="mt-6 rounded-2xl bg-ink-light/40 p-4">
+              <div>
+                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ivory-dim">
+                  Type
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {TYPE_FILTERS.map((f) => (
+                    <button
+                      key={f.value}
+                      type="button"
+                      onClick={() => setTypeFilter(f.value)}
+                      className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                        typeFilter === f.value
+                          ? "bg-brass text-ink-deep"
+                          : "bg-ink-light text-ivory-dim"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
                 </div>
               </div>
-            )}
+
+              <div className="mt-5">
+                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ivory-dim">
+                  Date range
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {PRESETS.map((p) => (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() => {
+                        setPreset(p.value);
+                        setCustomMode(false);
+                      }}
+                      className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+                        !customMode && preset === p.value
+                          ? "border-brass bg-ink-light text-brass-bright"
+                          : "border-transparent bg-ink-light text-ivory-dim"
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setCustomMode(true)}
+                    className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+                      customMode
+                        ? "border-brass bg-ink-light text-brass-bright"
+                        : "border-transparent bg-ink-light text-ivory-dim"
+                    }`}
+                  >
+                    Custom
+                  </button>
+                </div>
+
+                {customMode && (
+                  <div className="mt-4 flex gap-3">
+                    <div className="flex-1">
+                      <label htmlFor="fromDate" className="mb-1.5 block text-xs text-ivory-dim">
+                        From
+                      </label>
+                      <input
+                        id="fromDate"
+                        type="date"
+                        value={customFrom}
+                        onChange={(e) => setCustomFrom(e.target.value)}
+                        className="w-full rounded-lg border border-ink-light bg-ink-deep px-3 py-2.5 text-sm text-ivory"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label htmlFor="toDate" className="mb-1.5 block text-xs text-ivory-dim">
+                        To
+                      </label>
+                      <input
+                        id="toDate"
+                        type="date"
+                        value={customTo}
+                        onChange={(e) => setCustomTo(e.target.value)}
+                        className="w-full rounded-lg border border-ink-light bg-ink-deep px-3 py-2.5 text-sm text-ivory"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* Results */}
-            <div className="mt-6">
+            <div className="mt-8">
               {loading && <p className="text-sm text-ivory-dim">Loading…</p>}
 
               {!loading && error && (
@@ -193,22 +203,22 @@ export default function HistoryPage() {
 
               {!loading &&
                 !error &&
-                grouped.map(([key, txs]) => (
-                  <div key={key} className="mb-6">
-                    <h2 className="mb-2 text-sm font-semibold text-ivory-dim">
+                grouped.map(([key, txs], i) => (
+                  <div key={key} className={i === 0 ? "mb-8" : "mb-8 border-t border-ink-light pt-8"}>
+                    <h2 className="mb-3 text-sm font-semibold text-ivory-dim">
                       {dayHeaderLabel(key)}
                     </h2>
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-3">
                       {txs.map((tx) => (
                         <button
                           key={tx.id}
                           type="button"
                           onClick={() => setSelected(tx)}
-                          className="flex items-center justify-between rounded-xl bg-ink-light px-4 py-3 text-left"
+                          className="flex items-center justify-between rounded-2xl bg-ink-light px-4 py-4 text-left"
                         >
                           <div className="min-w-0">
                             <p className="truncate text-ivory">{tx.item_name}</p>
-                            <p className={`text-xs font-medium ${TYPE_COLOR_CLASS[tx.type]}`}>
+                            <p className={`mt-0.5 text-xs font-medium ${TYPE_COLOR_CLASS[tx.type]}`}>
                               {tx.type === "sale"
                                 ? "Sale"
                                 : tx.type === "purchase"
