@@ -27,15 +27,26 @@ const TYPE_META: Record<TxType, { label: string; sub: string }> = {
 // Unselected = solid ink-light card with a colored border and label.
 // Selected = solid color fill with dark ink text, same weight as the
 // primary brass CTA elsewhere in the app.
-const TYPE_STYLES: Record
+const TYPE_STYLES: Record<
   TxType,
   { border: string; text: string; selectedBg: string }
 > = {
-  sale: { border: "border-sale", text: "text-sale", selectedBg: "bg-sale" },
-  purchase: { border: "border-purchase", text: "text-purchase", selectedBg: "bg-purchase" },
-  expense: { border: "border-expense", text: "text-expense", selectedBg: "bg-expense" },
+  sale: {
+    border: "border-sale",
+    text: "text-sale",
+    selectedBg: "bg-sale",
+  },
+  purchase: {
+    border: "border-purchase",
+    text: "text-purchase",
+    selectedBg: "bg-purchase",
+  },
+  expense: {
+    border: "border-expense",
+    text: "text-expense",
+    selectedBg: "bg-expense",
+  },
 };
-
 export default function RecordPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>(1);
