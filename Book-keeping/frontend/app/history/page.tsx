@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { CircleNav } from "@/components/CircleNav";
 import { ReceiptDetailModal } from "@/components/ReceiptDetailModal";
+import { HistorySkeleton } from "@/components/HistorySkeleton";
+import { EmptyState } from "@/components/EmptyState";
 import { fetchTransactions, type Transaction, type TxType } from "@/lib/transactions-client";
 import { rangeForPreset, dayKey, dayHeaderLabel, type DatePreset } from "@/lib/date-ranges";
 
@@ -188,17 +190,20 @@ export default function HistoryPage() {
             </div>
 
             {/* Results */}
-            <div className="mt-8">
-              {loading && <p className="text-sm text-ivory-dim">Loading…</p>}
+            <div className={loading ? "" : "mt-8"}>
+              {loading && <HistorySkeleton />}
 
               {!loading && error && (
-                <p role="alert" className="text-sm text-expense">
+                <p role="alert" className="mt-8 text-sm text-expense">
                   {error}
                 </p>
               )}
 
               {!loading && !error && grouped.length === 0 && (
-                <p className="text-sm text-ivory-dim">No records for this range.</p>
+                <EmptyState
+                  title="Nothing here yet"
+                  subtitle="Records for this range will show up here once you start logging."
+                />
               )}
 
               {!loading &&
