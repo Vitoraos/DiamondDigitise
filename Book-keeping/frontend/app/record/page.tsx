@@ -294,53 +294,60 @@ export default function RecordPage() {
               </div>
             )}
 
-            {/* ── Step 3: done / receipt ── */}
             {step === 3 && savedTx && (
-              <div className="flex flex-col items-center pt-8 text-center">
-                <h1 className="font-display text-4xl text-brass-bright">Recorded!</h1>
-                <p className="mt-2 text-ivory-dim">
-                  {TYPE_META[savedTx.type].label} of ₦
-                  {savedTx.amount.toLocaleString("en-NG", { minimumFractionDigits: 2 })} saved.
-                </p>
+  <div className="flex flex-col items-center pt-8 text-center">
+    <h1 className="font-display text-4xl text-brass-bright">
+      Recorded!
+    </h1>
 
-                <div className="mt-10 flex w-full max-w-xs flex-col gap-3">
-                  
-                    <a
-  href={receiptPdfUrl(tx.id)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-full bg-brass px-6 py-4 text-center font-semibold text-ink-deep"
-                  >
-                    Download receipt
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => shareReceipt(receiptPdfUrl(savedTx.id))}
-                    className="rounded-full border border-brass px-6 py-4 text-center font-semibold text-brass"
-                  >
-                    Share
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSavedTx(null);
-                      setType(null);
-                      setStep(1);
-                    }}
-                    className="mt-2 text-sm text-ivory-dim underline"
-                  >
-                    Record another
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => router.push("/")}
-                    className="text-sm text-ivory-dim underline"
-                  >
-                    Back to home
-                  </button>
-                </div>
-              </div>
-            )}
+    <p className="mt-2 text-ivory-dim">
+      {TYPE_META[savedTx.type].label} of ₦
+      {savedTx.amount.toLocaleString("en-NG", {
+        minimumFractionDigits: 2,
+      })}{" "}
+      saved.
+    </p>
+
+    <div className="mt-10 flex w-full max-w-xs flex-col gap-3">
+      <a
+        href={receiptPdfUrl(savedTx.id)}
+        target="_blank"
+        rel="noreferrer"
+        className="rounded-full bg-brass px-6 py-4 text-center font-semibold text-ink-deep"
+      >
+        Download receipt
+      </a>
+
+      <button
+        type="button"
+        onClick={() => shareReceipt(receiptPdfUrl(savedTx.id))}
+        className="rounded-full border border-brass px-6 py-4 text-center font-semibold text-brass"
+      >
+        Share
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          setSavedTx(null);
+          setType(null);
+          setStep(1);
+        }}
+        className="mt-2 text-sm text-ivory-dim underline"
+      >
+        Record another
+      </button>
+
+      <button
+        type="button"
+        onClick={() => router.push("/")}
+        className="text-sm text-ivory-dim underline"
+      >
+        Back to home
+      </button>
+    </div>
+  </div>
+)}
           </div>
 
           <CircleNav />
