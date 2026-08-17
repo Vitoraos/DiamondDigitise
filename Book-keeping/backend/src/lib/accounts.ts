@@ -26,7 +26,7 @@ export const accounts: Account[] = [
     username: "Tare",
     phone: "+2347039725485",
     // placeholder hash — replace by running the hash-password script
-    passwordHash: "$$2b$10$SCsBntIHNWSjHF6VaZvXJOvsqaxiTPF9qmnACxg9.quJfH/czcjnm",
+    passwordHash: "$2b$10$SCsBntIHNWSjHF6VaZvXJOvsqaxiTPF9qmnACxg9.quJfH/czcjnm",
     displayName: "Tare",
     role: "owner",
   },
