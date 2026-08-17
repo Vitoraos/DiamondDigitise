@@ -23,11 +23,11 @@ export interface Account {
 
 export const accounts: Account[] = [
   {
-    username: "owner",
-    phone: "+2340000000000",
+    username: "Tare",
+    phone: "+2347039725485",
     // placeholder hash — replace by running the hash-password script
-    passwordHash: "$2a$10$REPLACE_WITH_REAL_BCRYPT_HASH_______________________",
-    displayName: "Owner",
+    passwordHash: "$$2b$10$SCsBntIHNWSjHF6VaZvXJOvsqaxiTPF9qmnACxg9.quJfH/czcjnm",
+    displayName: "Tare",
     role: "owner",
   },
 ];
