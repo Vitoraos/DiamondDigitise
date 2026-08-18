@@ -111,3 +111,30 @@ body {
 .animate-float {
   animation: gentle-float 3s ease-in-out infinite;
 }
+
+/* ── Page transition overlay ── */
+@keyframes spin-ring {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes curtain-fade {
+  0% {
+    opacity: 1;
+  }
+  65% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.animate-spin-ring {
+  animation: spin-ring 0.7s linear infinite;
+}
+
+.animate-curtain-fade {
+  animation: curtain-fade 550ms ease-in forwards;
+}
