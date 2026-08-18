@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Caveat, Manrope, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import { PageTransitionOverlay } from "@/components/PageTransitionOverlay";
 
 // Handwritten display face — the personal, quirky-human greeting
 const caveat = Caveat({
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col bg-ink text-ivory font-body">
         {children}
+        <PageTransitionOverlay />
       </body>
     </html>
   );
