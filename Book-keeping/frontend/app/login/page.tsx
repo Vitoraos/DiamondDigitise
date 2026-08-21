@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { login } from "@/lib/auth-client";
+import { useNavigation } from "@/lib/navigation-context";
 
 export default function LoginPage() {
-  const router = useRouter();
+  const { navigate } = useNavigation();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +25,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/");
+    navigate("/");
   }
 
   return (
