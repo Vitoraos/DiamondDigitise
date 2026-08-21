@@ -3,6 +3,7 @@
 import { Home, History, LogOut } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { logout } from "@/lib/auth-client";
+import { useNavigation } from "@/lib/navigation-context";
 
 interface NavButtonProps {
   label: string;
@@ -32,10 +33,11 @@ function NavButton({ label, active, onClick, children }: NavButtonProps) {
 export function CircleNav() {
   const router = useRouter();
   const pathname = usePathname();
+  const { navigate } = useNavigation();
 
   async function handleLogout() {
     await logout();
-    router.push("/login");
+    navigate("/login");
     router.refresh();
   }
 
@@ -44,13 +46,13 @@ export function CircleNav() {
       aria-label="Primary"
       className="flex items-center justify-center gap-6 pb-8 pt-4"
     >
-      <NavButton label="Home" active={pathname === "/"} onClick={() => router.push("/")}>
+      <NavButton label="Home" active={pathname === "/"} onClick={() => navigate("/")}>
         <Home size={22} strokeWidth={2} aria-hidden="true" />
       </NavButton>
       <NavButton
         label="History"
         active={pathname === "/history"}
-        onClick={() => router.push("/history")}
+        onClick={() => navigate("/history")}
       >
         <History size={22} strokeWidth={2} aria-hidden="true" />
       </NavButton>
