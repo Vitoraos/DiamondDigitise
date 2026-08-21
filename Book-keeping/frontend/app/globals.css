@@ -112,29 +112,47 @@ body {
   animation: gentle-float 3s ease-in-out infinite;
 }
 
-/* ── Page transition overlay ── */
-@keyframes spin-ring {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes curtain-fade {
+/* ── Page transition overlay: a rotating, glowing gem mark ── */
+@keyframes gem-turn {
   0% {
-    opacity: 1;
+    transform: rotateY(0deg) rotateZ(0deg);
   }
-  65% {
-    opacity: 1;
+  50% {
+    transform: rotateY(180deg) rotateZ(3deg);
   }
   100% {
-    opacity: 0;
+    transform: rotateY(360deg) rotateZ(0deg);
   }
 }
 
-.animate-spin-ring {
-  animation: spin-ring 0.7s linear infinite;
+@keyframes gem-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 4px rgba(201, 162, 75, 0.35));
+  }
+  50% {
+    filter: drop-shadow(0 0 16px rgba(221, 185, 104, 0.9));
+  }
 }
 
-.animate-curtain-fade {
-  animation: curtain-fade 550ms ease-in forwards;
+@keyframes spark-orbit {
+  from {
+    transform: rotate(0deg) translateX(30px) rotate(0deg);
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+  to {
+    transform: rotate(360deg) translateX(30px) rotate(-360deg);
+    opacity: 0.2;
+  }
+}
+
+.animate-gem-turn {
+  animation: gem-turn 1.8s ease-in-out infinite, gem-glow 1.8s ease-in-out infinite;
+  transform-style: preserve-3d;
+}
+
+.animate-spark-orbit {
+  animation: spark-orbit 1.8s linear infinite;
 }
